@@ -1,0 +1,21 @@
+﻿order,rate_table_name,weight_limit_g,location,rate_by,service,china_korea_taiwan_usd,other_asia_usd,zone3_non_eu_usd,eu_ddp_usd,zone5_usd,eu_copy_source,notes
+1,INT-AP-0100G-V2,100,International,Item,Economy,7.99,7.99,8.99,COPY_FROM_INT0300G-EUFIX,8.99,INT0300G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+2,INT-AP-0200G-V2,200,International,Item,Economy,8.99,8.99,9.99,COPY_FROM_INT0300G-EUFIX,10.99,INT0300G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+3,INT-AP-0300G-V2,300,International,Item,Economy,8.99,9.99,11.99,COPY_FROM_INT0300G-EUFIX,12.99,INT0300G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+4,INT-AP-0400G-V2,400,International,Item,Economy,9.99,10.99,12.99,49.99,14.99,INT0500G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+5,INT-AP-0500G-V2,500,International,Item,Economy,10.99,11.99,14.99,49.99,16.99,INT0500G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+6,INT-AP-0600G-V2,600,International,Item,Economy,11.99,12.99,15.99,59.99,18.99,INT0800G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+7,INT-AP-0700G-V2,700,International,Item,Economy,11.99,13.99,16.99,59.99,21.99,INT0800G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+8,INT-AP-0800G-V2,800,International,Item,Economy,12.99,14.99,18.99,59.99,23.99,INT0800G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+9,INT-AP-0900G-V2,900,International,Item,Economy,13.99,14.99,19.99,COPY_FROM_INT1000G-EUFIX,25.99,INT1000G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+10,INT-AP-1000G-V2,1000,International,Item,Economy,14.99,15.99,21.99,COPY_FROM_INT1000G-EUFIX,27.99,INT1000G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+11,INT-AP-1100G-V2,1100,International,Item,Economy,15.99,16.99,22.99,COPY_FROM_INT1500G-EUFIX,29.99,INT1500G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+12,INT-AP-1200G-V2,1200,International,Item,Economy,15.99,17.99,24.99,COPY_FROM_INT1500G-EUFIX,31.99,INT1500G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+13,INT-AP-1300G-V2,1300,International,Item,Economy,16.99,18.99,25.99,COPY_FROM_INT1500G-EUFIX,33.99,INT1500G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+14,INT-AP-1400G-V2,1400,International,Item,Economy,17.99,19.99,26.99,COPY_FROM_INT1500G-EUFIX,35.99,INT1500G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+15,INT-AP-1500G-V2,1500,International,Item,Economy,18.99,20.99,28.99,COPY_FROM_INT1500G-EUFIX,37.99,INT1500G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+16,INT-AP-1600G-V2,1600,International,Item,Economy,18.99,21.99,29.99,COPY_FROM_INT2000G-EUFIX,39.99,INT2000G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+17,INT-AP-1700G-V2,1700,International,Item,Economy,19.99,22.99,31.99,COPY_FROM_INT2000G-EUFIX,41.99,INT2000G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+18,INT-AP-1800G-V2,1800,International,Item,Economy,20.99,23.99,32.99,COPY_FROM_INT2000G-EUFIX,43.99,INT2000G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+19,INT-AP-1900G-V2,1900,International,Item,Economy,21.99,24.99,33.99,COPY_FROM_INT2000G-EUFIX,45.99,INT2000G-EUFIX,United States excluded; preserve EU SpeedPAK DDP
+20,INT-AP-2000G-V2,2000,International,Item,Economy,22.99,25.99,35.99,COPY_FROM_INT2000G-EUFIX,47.99,INT2000G-EUFIX,United States excluded; preserve EU SpeedPAK DDP

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="description" content="レンジファインダー・コンパクトを拡充したフィルムカメラ重量・eBay配送ポリシー判定ツール">
+  <meta name="theme-color" content="#111827">
+  <title>Film Camera Shipping Guide V4</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#judge" aria-label="トップへ">
+        <span class="brand-mark" aria-hidden="true">FC</span>
+        <span><strong>Film Camera Shipping Guide</strong><small>重量データベース × eBay送料V2</small></span>
+      </a>
+      <button id="themeToggle" class="icon-button" type="button" aria-label="表示テーマを切り替える">◐</button>
+    </div>
+    <nav class="main-nav" aria-label="メインメニュー">
+      <button class="nav-button is-active" data-view="judge" type="button">配送判定</button>
+      <button class="nav-button" data-view="database" type="button">重量データベース</button>
+      <button class="nav-button" data-view="genres" type="button">ジャンルから予測</button>
+      <button class="nav-button" data-view="data" type="button">実測データ</button>
+    </nav>
+  </header>
+
+  <main class="page-shell">
+    <section id="view-judge" class="view is-active" data-view-panel="judge">
+      <div class="page-heading">
+        <div><p class="eyebrow">SHIPPING POLICY SELECTOR</p><h1>商品名から重量を調べて、V2配送ポリシーと送料を判定</h1></div>
+        <p>運用中の20個の重量別ポリシーに対応しています。米国は商品価格に応じた個別上書き送料、米国以外は地域別の送料一覧額を表示します。</p>
+      </div>
+
+      <div class="judge-layout">
+        <form id="judgeForm" class="panel form-panel" novalidate>
+          <div class="section-title"><span>1</span><div><h2>商品を検索</h2><p>英語名、日本語メーカー名、型番、別名に対応</p></div></div>
+          <div class="search-combobox" id="judgeSearchBox">
+            <label for="productSearch">商品名・型番</label>
+            <div class="search-input-wrap"><span aria-hidden="true">⌕</span><input id="productSearch" type="search" autocomplete="off" placeholder="例：Nikon F3、DG-2、Autoboy 3"></div>
+            <div id="searchSuggestions" class="suggestions" role="listbox" hidden></div>
+          </div>
+          <div id="selectedItemCard" class="selected-item empty-state-small">
+            商品を選ぶと、重量と梱包目安を表示します。
+          </div>
+
+          <div class="section-divider"></div>
+          <div class="section-title"><span>2</span><div><h2>価格と梱包条件</h2><p>価格は送料を除いたeBayの商品価格</p></div></div>
+          <div class="field-grid">
+            <div class="field"><label for="priceUsd">商品価格 <span>USD</span></label><input id="priceUsd" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="89.99"><small id="priceError" class="field-error"></small></div>
+            <div class="field"><label for="exchangeRate">ドル円レート <span>円/USD</span></label><input id="exchangeRate" type="number" inputmode="decimal" min="1" step="0.01" value="150"><small>端末に保存。米国送料は手数料15%・梱包余裕200円で計算</small></div>
+          </div>
+
+          <fieldset class="weight-mode">
+            <legend>判定に使う重量</legend>
+            <label class="radio-card"><input type="radio" name="weightMode" value="estimate" checked><span><strong>データから見積もる</strong><small>本体重量＋梱包材＋追加品</small></span></label>
+            <label class="radio-card"><input type="radio" name="weightMode" value="measured"><span><strong>梱包後の実測値を使う</strong><small>最も正確な方法</small></span></label>
+          </fieldset>
+
+          <div id="estimateControls">
+            <div class="field-grid">
+              <div class="field"><label for="baseWeight">本体・商品重量 <span>g</span></label><input id="baseWeight" type="number" inputmode="decimal" min="0" step="1" placeholder="商品選択で自動入力"><small id="baseWeightHelp">手動修正できます</small></div>
+              <div class="field"><label for="packingWeight">梱包材の加算 <span>g</span></label><input id="packingWeight" type="number" inputmode="decimal" min="0" step="1" value="200"><small id="packingHelp">箱・緩衝材・袋など</small></div>
+            </div>
+            <div class="extras-block">
+              <div class="subheading"><h3>追加する付属品</h3><button id="clearExtras" class="text-button" type="button">選択を解除</button></div>
+              <div id="extraPresets" class="chip-grid"></div>
+              <div class="field compact-field"><label for="customExtra">その他の追加重量 <span>g</span></label><input id="customExtra" type="number" inputmode="decimal" min="0" step="1" value="0"></div>
+            </div>
+          </div>
+
+          <div id="measuredControls" class="field" hidden><label for="measuredWeight">梱包後の実測重量 <span>g</span></label><input id="measuredWeight" type="number" inputmode="decimal" min="0.1" step="0.1" placeholder="例：742"><small>箱を閉じ、付属品をすべて入れた状態で計測</small></div>
+
+          <div class="weight-summary"><span>判定重量</span><strong id="calculatedWeight">—</strong><small id="weightSummaryNote">商品を選択してください</small></div>
+          <button id="judgeButton" class="primary-button" type="submit">配送ポリシーを判定</button>
+        </form>
+
+        <aside class="panel result-panel" id="resultPanel" aria-live="polite">
+          <div class="result-header"><div><p class="eyebrow">RESULT</p><h2>判定結果</h2></div><span id="resultStatus" class="status neutral">未判定</span></div>
+          <div id="resultEmpty" class="result-empty"><div class="empty-icon">↗</div><p>商品・価格・重量を入力して判定してください。</p></div>
+          <div id="resultContent" hidden>
+            <div class="policy-block"><small>選択する配送ポリシー</small><div class="policy-copy-row"><code id="policyName"></code><button id="copyPolicy" type="button">コピー</button></div></div>
+            <div class="override-block"><small>この出品のみ上書きする米国送料</small><div class="policy-copy-row"><code id="usOverride"></code><button id="copyUsOverride" type="button">コピー</button></div><p>配送ポリシーを選択後、米国向けの購入者負担額へ入力します。</p></div>
+            <dl class="result-facts">
+              <div><dt>商品</dt><dd id="resultProduct"></dd></div>
+              <div><dt>判定重量</dt><dd id="resultWeight"></dd></div>
+              <div><dt>重量区分</dt><dd id="resultWeightTier"></dd></div>
+              <div><dt>商品価格</dt><dd id="resultPrice"></dd></div>
+              <div><dt>CPaSS請求区分</dt><dd id="resultPriceTier"></dd></div><div><dt>国際送料一覧</dt><dd id="resultRateTable"></dd></div>
+            </dl>
+            <section class="shipping-section"><div class="subheading"><h3>購入者に表示される送料</h3><span id="rateCaption"></span></div><div id="shippingCards" class="shipping-cards"></div><p class="micro-note">米国は出品ごとの上書き額です。米国以外は選択したINT-AP送料一覧の固定額です。</p></section>
+            <div id="resultWarning" class="warning-box" hidden></div>
+            <div id="resultManual" class="manual-box" hidden></div>
+          </div>
+        </aside>
+      </div>
+
+      <section class="summary-strip" id="datasetSummary"></section>
+    </section>
+
+    <section id="view-database" class="view" data-view-panel="database" hidden>
+      <div class="page-heading compact"><div><p class="eyebrow">DATABASE</p><h1>フィルムカメラ重量データベース</h1></div><p>公称・参考重量と、同ジャンルの推定範囲を区別して収録しています。</p></div>
+      <div class="toolbar panel">
+        <div class="db-search"><label for="dbSearch">検索</label><input id="dbSearch" type="search" placeholder="メーカー、機種名、型番、別名"></div>
+        <div class="filter-grid">
+          <label>種類<select id="kindFilter"><option value="">すべて</option><option value="camera">カメラ</option><option value="lens">レンズ</option><option value="accessory">アクセサリー</option></select></label>
+          <label>メーカー<select id="brandFilter"><option value="">すべて</option></select></label>
+          <label>ジャンル<select id="genreFilter"><option value="">すべて</option></select></label>
+          <label>マウント<select id="mountFilter"><option value="">すべて</option></select></label>
+          <label>重量データ<select id="qualityFilter"><option value="">すべて</option><option value="reference">参考重量あり</option><option value="genre-estimate">ジャンル推定</option><option value="local">端末の実測値</option></select></label>
+          <label>並び順<select id="sortFilter"><option value="relevance">関連度</option><option value="name">名称</option><option value="weightAsc">重量が軽い順</option><option value="weightDesc">重量が重い順</option><option value="yearDesc">発売年が新しい順</option></select></label>
+        </div>
+      </div>
+      <section id="coveragePanel" class="coverage-panel panel"></section>
+      <div class="database-meta"><p id="dbCount"></p><div class="view-switch"><button class="is-active" data-db-view="cards" type="button">カード</button><button data-db-view="table" type="button">表</button></div></div>
+      <div id="dbCards" class="item-grid"></div>
+      <div id="dbTableWrap" class="table-wrap" hidden><table><thead><tr><th>商品</th><th>ジャンル</th><th>形式</th><th>マウント</th><th>重量</th><th>品質</th><th>発売年</th></tr></thead><tbody id="dbTableBody"></tbody></table></div>
+      <div class="pagination"><button id="prevPage" type="button">前へ</button><span id="pageInfo"></span><button id="nextPage" type="button">次へ</button></div>
+    </section>
+
+    <section id="view-genres" class="view" data-view-panel="genres" hidden>
+      <div class="page-heading compact"><div><p class="eyebrow">GENRE ESTIMATOR</p><h1>ジャンル別の重さから未登録品を予測</h1></div><p>同じジャンル内の既知機種を比較し、未登録カメラの安全な重量帯を判断できます。</p></div>
+      <div class="genre-estimator panel">
+        <div class="genre-inputs">
+          <label for="unknownProductName">未登録の商品名</label><input id="unknownProductName" type="text" placeholder="例：メーカー不明の90年代AFコンパクト">
+          <label for="genreEstimateSelect">近いジャンルを選択</label><select id="genreEstimateSelect"></select>
+          <button id="useGenreEstimate" class="primary-button" type="button">この推定を配送判定に使う</button>
+        </div>
+        <div><div id="genreEstimateResult" class="genre-estimate-result"></div><div id="genreReferenceExamples" class="genre-reference-examples"></div></div>
+      </div>
+      <div id="genreGrid" class="genre-grid"></div>
+    </section>
+
+    <section id="view-data" class="view" data-view-panel="data" hidden>
+      <div class="page-heading compact"><div><p class="eyebrow">LOCAL MEASUREMENTS</p><h1>自分の実測データを蓄積</h1></div><p>同じ商品を再出品するときは、過去の梱包実測値を最優先で呼び出せます。データは端末内だけに保存されます。</p></div>
+      <div class="data-layout">
+        <form id="localForm" class="panel">
+          <h2>実測値を登録</h2>
+          <div class="field"><label for="localProductSearch">商品名</label><input id="localProductSearch" type="search" placeholder="登録済み商品を検索、または新しい商品名"></div>
+          <div id="localSuggestions" class="suggestions inline" hidden></div>
+          <div class="field-grid">
+            <div class="field"><label for="localBareWeight">本体・商品重量 <span>g</span></label><input id="localBareWeight" type="number" min="0" step="0.1" placeholder="任意"></div>
+            <div class="field"><label for="localPackedWeight">梱包後重量 <span>g</span></label><input id="localPackedWeight" type="number" min="0" step="0.1" placeholder="任意"></div>
+          </div>
+          <div class="field"><label for="localGenre">ジャンル</label><select id="localGenre"></select></div>
+          <div class="field"><label for="localNote">メモ</label><textarea id="localNote" rows="3" placeholder="元箱あり、レンズキャップ込み、箱サイズなど"></textarea></div>
+          <button class="primary-button" type="submit">この端末に保存</button>
+        </form>
+        <div class="panel">
+          <div class="subheading"><div><h2>保存済みデータ</h2><p id="localCount"></p></div><div class="button-row"><button id="exportLocal" type="button">書き出す</button><label class="file-button">読み込む<input id="importLocal" type="file" accept="application/json"></label></div></div>
+          <div id="localList" class="local-list"></div>
+        </div>
+      </div>
+      <section class="panel source-panel"><h2>データの見方と出典</h2><div id="sourceList"></div><div class="quality-legend"><p><b>B 参考重量</b>：公開仕様として一般的に掲載される代表値。構成違いに注意。</p><p><b>D ジャンル推定</b>：同ジャンルの参考重量分布から算出。実測前の仮判定用。</p><p><b>実測</b>：この端末に保存した値。梱包条件が同じなら最優先。</p></div></section>
+    </section>
+  </main>
+
+  <dialog id="itemDialog" class="item-dialog"><button id="closeDialog" class="dialog-close" type="button" aria-label="閉じる">×</button><div id="dialogContent"></div></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <footer class="site-footer"><p>重量は仕様違い・付属品・電池・フィルムで変わります。最終判断は梱包後の実測値を使用してください。</p><p id="footerMeta"></p></footer>
+  <script src="data/database.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
