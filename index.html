@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="梱包後重量とeBay商品価格から、使用する配送ポリシーを判定します。">
+  <title>eBay 配送ポリシー選択ツール</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">入力フォームへ移動</a>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand" aria-label="eBay 配送ポリシー選択ツール">
+        <span class="brand-mark" aria-hidden="true">EP</span>
+        <span class="brand-text">eBay Policy Guide</span>
+      </div>
+      <button class="theme-button" id="themeButton" type="button" aria-label="表示テーマを切り替える" title="表示テーマを切り替える">
+        <span aria-hidden="true" id="themeIcon">◐</span>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" class="page-shell">
+    <section class="intro" aria-labelledby="pageTitle">
+      <p class="eyebrow">出品前の確認</p>
+      <h1 id="pageTitle">配送ポリシーをすぐ判定</h1>
+      <p>梱包後の重量と、送料を除いたeBayの商品価格を入力してください。該当する12種類のポリシーから1つを表示します。</p>
+    </section>
+
+    <div class="workspace">
+      <section class="panel form-panel" aria-labelledby="formTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="section-number">01</p>
+            <h2 id="formTitle">商品情報</h2>
+          </div>
+          <span class="required-note">2項目で判定</span>
+        </div>
+
+        <form id="policyForm" novalidate>
+          <div class="field optional-field">
+            <label for="itemName">商品名 <span>任意</span></label>
+            <input id="itemName" name="itemName" type="text" autocomplete="off" maxlength="80" placeholder="例：Nikon DG-2">
+          </div>
+
+          <div class="field-grid">
+            <div class="field">
+              <label for="price">商品価格</label>
+              <div class="input-with-unit">
+                <span class="prefix" aria-hidden="true">$</span>
+                <input id="price" name="price" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="89.99" aria-describedby="priceHelp priceError" required>
+                <span class="suffix">USD</span>
+              </div>
+              <p class="help-text" id="priceHelp">送料を除いた、eBay上の出品価格</p>
+              <p class="error-text" id="priceError" role="alert"></p>
+            </div>
+
+            <div class="field">
+              <label for="weight">梱包後重量</label>
+              <div class="input-with-unit no-prefix">
+                <input id="weight" name="weight" type="number" inputmode="decimal" min="1" step="1" placeholder="730" aria-describedby="weightHelp weightError" required>
+                <span class="suffix">g</span>
+              </div>
+              <p class="help-text" id="weightHelp">箱・緩衝材・付属品を含む総重量</p>
+              <p class="error-text" id="weightError" role="alert"></p>
+            </div>
+          </div>
+
+          <label class="check-row" for="packedCheck">
+            <input id="packedCheck" name="packedCheck" type="checkbox" checked>
+            <span>
+              <strong>発送状態で計量済み</strong>
+              <small>未梱包の場合、判定結果は仮の目安になります。</small>
+            </span>
+          </label>
+
+          <button class="primary-button" type="submit">
+            <span>使用するポリシーを判定</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </form>
+      </section>
+
+      <section class="panel result-panel" aria-labelledby="resultTitle" aria-live="polite">
+        <div class="panel-heading">
+          <div>
+            <p class="section-number">02</p>
+            <h2 id="resultTitle">判定結果</h2>
+          </div>
+          <span class="status-badge" id="resultStatus">未判定</span>
+        </div>
+
+        <div id="resultEmpty" class="result-empty">
+          <div class="empty-icon" aria-hidden="true">↳</div>
+          <p>商品価格と梱包後重量を入力すると、ここに選ぶべきポリシーが表示されます。</p>
+        </div>
+
+        <div id="resultContent" class="result-content" hidden>
+          <p class="result-kicker" id="resultKicker">選ぶポリシー</p>
+          <div class="policy-name-row">
+            <output class="policy-name" id="policyName"></output>
+            <button class="copy-button" id="copyButton" type="button" aria-label="ポリシー名をコピー">コピー</button>
+          </div>
+
+          <div class="tier-grid" aria-label="判定区分">
+            <div class="tier-item">
+              <span>重量区分</span>
+              <strong id="weightTier"></strong>
+            </div>
+            <div class="tier-item">
+              <span>価格区分</span>
+              <strong id="priceTier"></strong>
+            </div>
+          </div>
+
+          <dl class="result-details">
+            <div>
+              <dt>入力した商品</dt>
+              <dd id="resultItem"></dd>
+            </div>
+            <div>
+              <dt>判定に使用した値</dt>
+              <dd id="resultValues"></dd>
+            </div>
+          </dl>
+
+          <div class="notice" id="resultNotice" hidden></div>
+          <p class="location-note">購入者の国・地域ごとの送料は、選択したポリシー内の送料一覧から自動で適用されます。</p>
+        </div>
+
+        <div id="manualResult" class="manual-result" hidden>
+          <div class="manual-symbol" aria-hidden="true">!</div>
+          <div>
+            <h3>個別確認が必要です</h3>
+            <p id="manualMessage"></p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section class="guide-section" aria-labelledby="guideTitle">
+      <div class="section-heading-row">
+        <div>
+          <p class="eyebrow">選択ルール</p>
+          <h2 id="guideTitle">全ポリシー一覧</h2>
+        </div>
+        <button class="text-button" id="toggleTable" type="button" aria-expanded="false" aria-controls="policyTableWrap">一覧を表示</button>
+      </div>
+
+      <div id="policyTableWrap" class="table-wrap" hidden>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">梱包後重量</th>
+              <th scope="col">100USD以下</th>
+              <th scope="col">101〜250USD</th>
+            </tr>
+          </thead>
+          <tbody id="policyTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="rule-grid">
+        <article class="rule-card">
+          <span class="rule-index">A</span>
+          <h3>重量は切り上げ</h3>
+          <p>301gなら500G、801gなら1000Gを選びます。境界付近では計量誤差を考慮してください。</p>
+        </article>
+        <article class="rule-card">
+          <span class="rule-index">B</span>
+          <h3>価格は送料を除く</h3>
+          <p>100.00USDまでは100USD区分、100.01〜250.00USDは101250USD区分です。</p>
+        </article>
+        <article class="rule-card">
+          <span class="rule-index">C</span>
+          <h3>上限超過は個別計算</h3>
+          <p>2000g超または250USD超の商品は、既存ポリシーを選ばず送料と補償を確認します。</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>eBay shipping policy selector · 商品情報は端末内でのみ処理されます。</p>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden>コピーしました</div>
+
+  <script src="script.js"></script>
+</body>
+</html>
