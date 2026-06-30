@@ -160,46 +160,61 @@
   }));
   ['baseWeight','packingWeight','customExtra','measuredWeight'].forEach(id=>$('#'+id).addEventListener('input',updateCalculatedWeight));
 
-  function choosePolicy(weight,price){
+  function roundUpX99(value){return Math.round((Math.ceil(value-0.99-1e-9)+0.99)*100)/100;}
+  function usOverrideFor(tier,price,rate){
+    const m=DB.policies.model;
+    const dutyJpy=price*rate*m.dutyRate;
+    const totalJpy=tier.transportJpy+m.customsFeeJpy+dutyJpy*(1+m.dutyProcessingRate)+m.packingBufferJpy;
+    return roundUpX99(totalJpy/(rate*(1-m.ebayFeeRate)));
+  }
+  function choosePolicy(weight,price,rate){
     const tier=DB.policies.tiers.find(t=>weight<=t.maxWeight);
-    const priceTier=DB.policies.priceTiers.find(t=>price<=t.maxPrice);
-    if(!tier||!priceTier) return {tier,priceTier,manual:true};
-    return {tier,priceTier,manual:false,name:`CAM${tier.code}${priceTier.code}`};
+    if(!tier) return {tier,manual:true};
+    return {tier,manual:false,name:tier.policyName,usOverride:usOverrideFor(tier,price,rate)};
   }
   function judge(event){
     event.preventDefault();
-    const price=Number($('#priceUsd').value),weight=currentWeight(),rate=Number($('#exchangeRate').value)||156;
+    const price=Number($('#priceUsd').value),weight=currentWeight(),rate=Number($('#exchangeRate').value)||150;
     $('#priceError').textContent=price>0?'':'0より大きい商品価格を入力してください。';
     if(!(price>0)){ $('#priceUsd').focus(); return; }
     if(!(weight>0)){ showToast('判定に使う重量を入力してください'); return; }
     storageSet('filmCameraExchangeRate',String(rate));
-    const result=choosePolicy(weight,price),product=selectedItem?.name || $('#productSearch').value.trim() || '商品名未入力';
+    const result=choosePolicy(weight,price,rate),product=selectedItem?.name || $('#productSearch').value.trim() || '商品名未入力';
     $('#resultEmpty').hidden=true;$('#resultContent').hidden=false;
     $('#resultProduct').textContent=product;$('#resultWeight').textContent=fmtG(weight);$('#resultPrice').textContent=`${fmtUsd(price)}（${fmtYen(price*rate)}）`;
     $('#rateCaption').textContent=`1 USD = ${fmtNum(rate,2)}円`;
     $('#resultWarning').hidden=true;$('#resultManual').hidden=true;
     if(result.manual){
       $('#resultStatus').textContent='個別確認';$('#resultStatus').className='status manual';
-      $('#policyName').textContent='既存ポリシー対象外';$('#resultWeightTier').textContent=weight>2000?'2000g超':'—';$('#resultPriceTier').textContent=price>250?'250USD超':'—';
+      $('#policyName').textContent='V2ポリシー対象外';$('#usOverride').textContent='—';$('#resultWeightTier').textContent='2000g超';$('#resultPriceTier').textContent='—';$('#resultRateTable').textContent='—';
       $('#shippingCards').innerHTML='';
-      const reasons=[];if(weight>2000)reasons.push('重量が2000gを超えています');if(price>250)reasons.push('商品価格が250USDを超えています');
-      $('#resultManual').textContent=`${reasons.join('。')}。実送料、補償、署名、EU向けDDP費用を個別に確認してください。`;$('#resultManual').hidden=false;
+      $('#resultManual').textContent='重量が2000gを超えています。CPaSS実見積もりと配送サービスを個別に確認してください。';$('#resultManual').hidden=false;
     }else{
-      $('#resultStatus').textContent='判定完了';$('#resultStatus').className='status ready';$('#policyName').textContent=result.name;
-      $('#resultWeightTier').textContent=result.tier.label;$('#resultPriceTier').textContent=result.priceTier.label;
-      const us=result.priceTier.code==='100USD'?result.tier.usLow:result.tier.usHigh;
-      const cards=[['米国',us,'US向け送料一覧',true],['EU27',result.tier.eu,'EU対応送料一覧',false],['その他の対応国',result.tier.intl,'英国・スイスなど',false],['国際基準送料',result.tier.fallback,'送料一覧外の地域',false]];
+      const tier=result.tier;
+      $('#resultStatus').textContent='判定完了';$('#resultStatus').className='status ready';$('#policyName').textContent=result.name;$('#usOverride').textContent=fmtUsd(result.usOverride);
+      $('#resultWeightTier').textContent=tier.label;$('#resultPriceTier').textContent=`${tier.cpassTierG}g区分`;$('#resultRateTable').textContent=tier.rateTableName;
+      const cards=[
+        ['米国',result.usOverride,'出品単位で上書き',true],
+        ['中国・韓国・台湾',tier.chinaKoreaTaiwan,'国際エアパケット',false],
+        ['その他アジア',tier.otherAsia,'国際エアパケット',false],
+        ['カナダ・英国・豪州など',tier.zone3,'非EU欧州・中東を含む',false],
+        ['EU加盟国',tier.eu,'SpeedPAK DDP',false],
+        ['中南米・アフリカ',tier.zone5,'国際エアパケット',false]
+      ];
       $('#shippingCards').innerHTML=cards.map(([label,usd,note,primary])=>`<div class="shipping-card ${primary?'primary':''}"><span>${label}</span><strong>${fmtUsd(usd)}</strong><small>${fmtYen(usd*rate)} · ${note}</small></div>`).join('');
       const warnings=[];
-      const remain=result.tier.maxWeight-weight;if(remain>=0&&remain<=20){const next=DB.policies.tiers[DB.policies.tiers.indexOf(result.tier)+1];if(next)warnings.push(`上限まで残り${fmtG(remain)}です。計量誤差がある場合は${next.code}区分が安全です。`)}
+      const remain=tier.maxWeight-weight;if(remain>=0&&remain<=20){const next=DB.policies.tiers[DB.policies.tiers.indexOf(tier)+1];if(next)warnings.push(`上限まで残り${fmtG(remain)}です。計量誤差がある場合は${next.policyName}が安全です。`)}
       const weightMode=$('input[name="weightMode"]:checked').value;
       if(weightMode!=='measured') warnings.push('推定重量による仮判定です。出品・発送前に梱包後重量を実測してください。');
+      if(tier.cpassTierG>DB.policies.model.validatedMaxTierG) warnings.push('1kg超の米国送料モデルは追加見積もり推奨区分です。高額・大型商品はCPaSSで照合してください。');
+      if(price>250) warnings.push('250USD超の商品です。補償上限・関税・署名要否も個別に確認してください。');
+      if(tier.additionalItem>0) warnings.push(`複数在庫では、同一商品ごとの追加送料${fmtUsd(tier.additionalItem)}が設定されています。`);
       if(weightMode!=='measured' && selectedItem?.dataType==='genre-estimate'&&!localFor(selectedItem)) {
         warnings.push('この商品の個別重量は未収録のため、同ジャンルの上限寄りで計算しています。');
         const low=Number(selectedItem.weightMinG||0)+Number(selectedItem.packingMinG||0)+extraWeight();
         const high=Number(selectedItem.weightMaxG||0)+Number(selectedItem.packingMaxG||0)+extraWeight();
         const lowTier=DB.policies.tiers.find(t=>low<=t.maxWeight), highTier=DB.policies.tiers.find(t=>high<=t.maxWeight);
-        if(lowTier && highTier && lowTier.code!==highTier.code) warnings.push(`推定範囲では${lowTier.code}〜${highTier.code}にまたがるため、現在は安全側の${highTier.code}で判定しています。`);
+        if(lowTier && highTier && lowTier.code!==highTier.code) warnings.push(`推定範囲では${lowTier.policyName}〜${highTier.policyName}にまたがるため、現在は安全側の${highTier.policyName}で判定しています。`);
       }
       if(warnings.length){$('#resultWarning').textContent=warnings.join(' ');$('#resultWarning').hidden=false;}
     }
@@ -312,7 +327,7 @@
   function init(){
     initTheme();populateFilters();renderExtraPresets();renderDatasetSummary();renderCoverage();initSearches();renderGenres();renderLocalData();
     const savedRate=Number(storageGet('filmCameraExchangeRate'));if(savedRate>0)$('#exchangeRate').value=savedRate;
-    $('#judgeForm').addEventListener('submit',judge);$('#copyPolicy').addEventListener('click',async()=>{const t=$('#policyName').textContent;if(!t||t==='既存ポリシー対象外')return;try{await navigator.clipboard.writeText(t)}catch{const ta=document.createElement('textarea');ta.value=t;document.body.append(ta);ta.select();document.execCommand('copy');ta.remove()}showToast('ポリシー名をコピーしました')});
+    $('#judgeForm').addEventListener('submit',judge);$('#copyPolicy').addEventListener('click',async()=>{const t=$('#policyName').textContent;if(!t||t==='V2ポリシー対象外')return;try{await navigator.clipboard.writeText(t)}catch{const ta=document.createElement('textarea');ta.value=t;document.body.append(ta);ta.select();document.execCommand('copy');ta.remove()}showToast('ポリシー名をコピーしました')});$('#copyUsOverride').addEventListener('click',async()=>{const t=$('#usOverride').textContent.replace('$','');if(!t||t==='—')return;try{await navigator.clipboard.writeText(t)}catch{const ta=document.createElement('textarea');ta.value=t;document.body.append(ta);ta.select();document.execCommand('copy');ta.remove()}showToast('米国送料をコピーしました')});
     const initial=(location.hash||'#judge').slice(1);if(['judge','database','genres','data'].includes(initial))setView(initial);
     updateCalculatedWeight();renderDatabase();
   }

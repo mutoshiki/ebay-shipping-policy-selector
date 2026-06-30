@@ -13,7 +13,7 @@
     <div class="header-inner">
       <a class="brand" href="#judge" aria-label="トップへ">
         <span class="brand-mark" aria-hidden="true">FC</span>
-        <span><strong>Film Camera Shipping Guide</strong><small>重量データベース × eBay配送判定</small></span>
+        <span><strong>Film Camera Shipping Guide</strong><small>重量データベース × eBay送料V2</small></span>
       </a>
       <button id="themeToggle" class="icon-button" type="button" aria-label="表示テーマを切り替える">◐</button>
     </div>
@@ -28,8 +28,8 @@
   <main class="page-shell">
     <section id="view-judge" class="view is-active" data-view-panel="judge">
       <div class="page-heading">
-        <div><p class="eyebrow">SHIPPING POLICY SELECTOR</p><h1>商品名から重量を調べて、配送ポリシーを判定</h1></div>
-        <p>登録済みの公称・参考重量を使い、未登録品は同ジャンルの重量範囲から安全側に見積もります。発送前は梱包後の実測値を優先してください。</p>
+        <div><p class="eyebrow">SHIPPING POLICY SELECTOR</p><h1>商品名から重量を調べて、V2配送ポリシーと送料を判定</h1></div>
+        <p>運用中の20個の重量別ポリシーに対応しています。米国は商品価格に応じた個別上書き送料、米国以外は地域別の送料一覧額を表示します。</p>
       </div>
 
       <div class="judge-layout">
@@ -48,7 +48,7 @@
           <div class="section-title"><span>2</span><div><h2>価格と梱包条件</h2><p>価格は送料を除いたeBayの商品価格</p></div></div>
           <div class="field-grid">
             <div class="field"><label for="priceUsd">商品価格 <span>USD</span></label><input id="priceUsd" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="89.99"><small id="priceError" class="field-error"></small></div>
-            <div class="field"><label for="exchangeRate">ドル円レート <span>円/USD</span></label><input id="exchangeRate" type="number" inputmode="decimal" min="1" step="0.01" value="156"><small>端末に保存されます</small></div>
+            <div class="field"><label for="exchangeRate">ドル円レート <span>円/USD</span></label><input id="exchangeRate" type="number" inputmode="decimal" min="1" step="0.01" value="150"><small>端末に保存。米国送料は手数料15%・梱包余裕200円で計算</small></div>
           </div>
 
           <fieldset class="weight-mode">
@@ -80,14 +80,15 @@
           <div id="resultEmpty" class="result-empty"><div class="empty-icon">↗</div><p>商品・価格・重量を入力して判定してください。</p></div>
           <div id="resultContent" hidden>
             <div class="policy-block"><small>選択する配送ポリシー</small><div class="policy-copy-row"><code id="policyName"></code><button id="copyPolicy" type="button">コピー</button></div></div>
+            <div class="override-block"><small>この出品のみ上書きする米国送料</small><div class="policy-copy-row"><code id="usOverride"></code><button id="copyUsOverride" type="button">コピー</button></div><p>配送ポリシーを選択後、米国向けの購入者負担額へ入力します。</p></div>
             <dl class="result-facts">
               <div><dt>商品</dt><dd id="resultProduct"></dd></div>
               <div><dt>判定重量</dt><dd id="resultWeight"></dd></div>
               <div><dt>重量区分</dt><dd id="resultWeightTier"></dd></div>
               <div><dt>商品価格</dt><dd id="resultPrice"></dd></div>
-              <div><dt>価格区分</dt><dd id="resultPriceTier"></dd></div>
+              <div><dt>CPaSS請求区分</dt><dd id="resultPriceTier"></dd></div><div><dt>国際送料一覧</dt><dd id="resultRateTable"></dd></div>
             </dl>
-            <section class="shipping-section"><div class="subheading"><h3>購入者に表示される送料</h3><span id="rateCaption"></span></div><div id="shippingCards" class="shipping-cards"></div><p class="micro-note">送料一覧が設定された地域では一覧の金額が優先され、一覧外では国際基準送料が使われます。</p></section>
+            <section class="shipping-section"><div class="subheading"><h3>購入者に表示される送料</h3><span id="rateCaption"></span></div><div id="shippingCards" class="shipping-cards"></div><p class="micro-note">米国は出品ごとの上書き額です。米国以外は選択したINT-AP送料一覧の固定額です。</p></section>
             <div id="resultWarning" class="warning-box" hidden></div>
             <div id="resultManual" class="manual-box" hidden></div>
           </div>
