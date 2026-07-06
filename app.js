@@ -19,12 +19,9 @@
   let dbPage = 1;
   let dbMode = 'cards';
   const pageSize = 30;
-  const extras = [
-    {id:'strap',label:'ストラップ',g:70},{id:'case',label:'ケース',g:180},{id:'film',label:'フィルム1本',g:30},
-    {id:'battery',label:'電池',g:45},{id:'caps',label:'前後キャップ',g:30},{id:'hood',label:'レンズフード',g:45},
-    {id:'box',label:'元箱',g:120},{id:'manual',label:'説明書',g:80}
-  ];
-  const activeExtras = new Set();
+  const packingProfiles = new Map((DB.packingProfiles||[]).map(p=>[p.id,p]));
+  let currentExtras = [];
+  let suppressPackingInput = false;
   let localMeasurements = loadLocal();
   let toastTimer;
   const memoryStorage = new Map();
@@ -39,6 +36,14 @@
   function localFor(item){
     if(!item) return null;
     return localMeasurements.find(x => x.itemId===item.id) || localMeasurements.find(x => normalize(x.name)===normalize(item.name));
+  }
+  function localPackingFor(item){
+    const local=localFor(item); if(!local) return null;
+    const bare=Number(local.bareWeight)||0, packed=Number(local.packedWeight)||0;
+    return bare>0&&packed>bare ? packed-bare : null;
+  }
+  function profileForItem(item){
+    return packingProfiles.get(item?.packingProfile) || packingProfiles.get('small-box');
   }
   function showToast(message){
     const el=$('#toast'); clearTimeout(toastTimer); el.textContent=message;el.hidden=false;
@@ -122,27 +127,81 @@
 
   function selectItem(item){
     selectedItem=item; $('#productSearch').value=item.name;
-    const badge=dataLabel(item),w=effectiveWeight(item),local=localFor(item);
+    const badge=dataLabel(item),w=effectiveWeight(item),local=localFor(item),profile=profileForItem(item),localPacking=localPackingFor(item);
     $('#selectedItemCard').classList.remove('empty-state-small');
-    $('#selectedItemCard').innerHTML=`<div class="selected-title"><div><span class="item-brand">${escapeHtml(item.brand)}</span><h3>${escapeHtml(item.name)}</h3></div><button type="button" id="clearSelected">選択解除</button></div><div class="selected-meta"><span class="tag">${escapeHtml(typeLabel(item.kind))}</span><span class="tag">${escapeHtml(item.genreJa)}</span>${item.format?`<span class="tag">${escapeHtml(item.format)}</span>`:''}${item.mount?`<span class="tag">${escapeHtml(item.mount)}</span>`:''}<span class="quality-badge ${badge.cls}">${escapeHtml(badge.text)}</span></div><div class="selected-weight"><div><span>${w.type==='estimate'?'推定重量範囲':'本体・商品重量'}</span><strong>${escapeHtml(itemWeightText(item))}</strong></div><div><span>重量条件</span><strong>${escapeHtml(local?.note || item.weightCondition || '—')}</strong></div></div>`;
+    $('#selectedItemCard').innerHTML=`<div class="selected-title"><div><span class="item-brand">${escapeHtml(item.brand)}</span><h3>${escapeHtml(item.name)}</h3></div><button type="button" id="clearSelected">選択解除</button></div><div class="selected-meta"><span class="tag">${escapeHtml(typeLabel(item.kind))}</span><span class="tag">${escapeHtml(item.genreJa)}</span>${item.format?`<span class="tag">${escapeHtml(item.format)}</span>`:''}${item.mount?`<span class="tag">${escapeHtml(item.mount)}</span>`:''}<span class="quality-badge ${badge.cls}">${escapeHtml(badge.text)}</span></div><div class="selected-weight three"><div><span>${w.type==='estimate'?'推定重量範囲':'本体・商品重量'}</span><strong>${escapeHtml(itemWeightText(item))}</strong></div><div><span>推奨梱包</span><strong>${escapeHtml(profile?.label||'手動')}</strong></div><div><span>梱包加算</span><strong>${fmtG(localPacking ?? item.packingDefaultG ?? profile?.defaultG ?? item.packingMaxG)}</strong></div></div>`;
     $('#clearSelected').addEventListener('click',clearSelectedItem);
     $('#baseWeight').value=Math.round(w.value);
-    $('#packingWeight').value=item.packingMaxG;
-    $('#packingHelp').textContent=`${fmtG(item.packingMinG)}〜${fmtG(item.packingMaxG)}が目安。安全側の上限を入力済み`;
+    suppressPackingInput=true;
+    if(localPacking!=null){$('#packingProfile').value='custom';$('#packingWeight').value=Math.round(localPacking);$('#packingHelp').textContent=`保存済み実測：梱包後−本体 = ${fmtG(localPacking)}`;}
+    else{$('#packingProfile').value=item.packingProfile||profile?.id||'custom';$('#packingWeight').value=Math.round(item.packingDefaultG??profile?.defaultG??item.packingMaxG);$('#packingHelp').textContent=`通常 ${fmtG(item.packingMinG)}〜${fmtG(item.packingMaxG)}。中央の標準値を入力済み`;}
+    suppressPackingInput=false;
     $('#baseWeightHelp').textContent=w.type==='estimate'?`同ジャンルの${fmtG(w.min)}〜${fmtG(w.max)}から安全側を採用`:(w.type==='local'?'保存済みの実測値を使用':'公開仕様の代表値。実物との差に注意');
-    updateCalculatedWeight();
+    renderPackingBreakdown();renderExtraPresets(item);updateCalculatedWeight();
   }
   function clearSelectedItem(){
-    selectedItem=null;$('#productSearch').value='';$('#baseWeight').value='';
+    selectedItem=null;$('#productSearch').value='';$('#baseWeight').value='';$('#packingProfile').value='custom';renderPackingBreakdown();renderExtraPresets(null);
     $('#selectedItemCard').className='selected-item empty-state-small';$('#selectedItemCard').textContent='商品を選ぶと、重量と梱包目安を表示します。';updateCalculatedWeight();
   }
 
-  function renderExtraPresets(){
-    $('#extraPresets').innerHTML=extras.map(e=>`<button class="extra-chip" type="button" data-extra="${e.id}">${e.label}<small>+${e.g}g</small></button>`).join('');
-    $$('.extra-chip').forEach(b=>b.addEventListener('click',()=>{const id=b.dataset.extra;activeExtras.has(id)?activeExtras.delete(id):activeExtras.add(id);b.classList.toggle('is-active',activeExtras.has(id));updateCalculatedWeight()}));
-    $('#clearExtras').addEventListener('click',()=>{activeExtras.clear();$$('.extra-chip').forEach(x=>x.classList.remove('is-active'));$('#customExtra').value=0;updateCalculatedWeight()});
+  function accessorySuggestions(item){
+    if(!item) return [
+      {id:'strap',label:'ストラップ',g:60,note:'一般的な細幅ストラップ'},
+      {id:'case',label:'ケース',g:180,note:'サイズにより要修正'},
+      {id:'box',label:'元箱',g:140,note:'内装材を含む目安'},
+      {id:'manual',label:'説明書',g:45,note:'薄い冊子'}
+    ];
+    const name=item.name.toLowerCase(), w=effectiveWeight(item).value, out=[];
+    const add=(id,label,g,note)=>out.push({id,label,g,note});
+    if(/ar-?2|ar-?3/.test(name)){add('release-case','純正小袋・ケース',12,'付属する場合');add('retail-box','元箱',24,'小型紙箱');add('instruction','説明書',7,'折り紙1枚程度');return out;}
+    if(/as-1/.test(name)){add('plastic-case','純正ケース',24,'樹脂ケース');add('retail-box','元箱',30,'小型紙箱');add('instruction','説明書',8,'薄紙');return out;}
+    if(/focusing screen/.test(name)){add('screen-case','純正スクリーンケース',22,'樹脂ケース');add('outer-box','元箱',18,'小型紙箱');add('insert','ピンセット・台紙',6,'付属する場合');return out;}
+    if(/dk-5|eyepiece cap/.test(name)){add('retail-bag','純正袋',3,'小袋');add('multi-pack','追加同一品1個',2,'複数個販売時');return out;}
+    if(/dg-2/.test(name)){add('adapter','接眼アダプター',8,'付属する場合');add('plastic-case','純正ケース',38,'樹脂ケース');add('retail-box','元箱',42,'紙箱');return out;}
+    if(item.kind==='camera'){
+      add('film','35mmフィルム1本',30,'ケース込み');
+      if(item.genre.includes('SLR')) add('body-cap','ボディキャップ',12,'ボディ単体出品時'); else add('lens-cap','レンズキャップ',14,'固定レンズ用');
+      const batt=item.genre.includes('AF')||item.genre.includes('zoom')?36:12;add('battery','電池1組',batt,'機種により種類が異なるため修正可');
+      add('strap','ストラップ',item.genre.includes('Medium')?85:58,'一般的な純正ストラップ');
+      add('case','専用ケース',w>700?240:w>400?190:145,'革ケース・ソフトケース');
+      add('box','元箱＋内装',w>700?240:w>400?180:130,'箱サイズに応じた標準値');
+      add('manual','説明書',w>700?70:48,'冊子');
+    }else if(item.kind==='lens'){
+      const scale=w>900?1.8:w>450?1.35:1;
+      add('front-cap','フロントキャップ',Math.round(14*scale),'口径に合わせて修正可');
+      add('rear-cap','リアキャップ',Math.round(18*scale),'マウント別');
+      add('filter','保護フィルター',Math.round(22*scale),'口径により変動');
+      add('hood','レンズフード',Math.round(42*scale),'金属・大型は重め');
+      add('pouch','ソフトケース',Math.round(60*scale),'巾着・ポーチ');
+      if(w>650)add('collar','三脚座',w>1200?220:135,'付属する場合');
+      add('box','元箱＋内装',Math.round(130*scale),'内装材込み');
+      add('manual','説明書',35,'薄い冊子');
+    }else{
+      if(item.genre==='Flash'){add('battery','電池1組',96,'単3×4本の目安');add('stand','フラッシュスタンド',24,'付属する場合');add('case','専用ケース',80,'ソフトケース');}
+      else if(item.genre.includes('finder')||item.genre==='Finder accessory'){add('adapter','接眼アダプター',8,'付属する場合');add('case','純正ケース',55,'樹脂・ソフトケース');}
+      else if(item.genre==='Motor drive / winder'){add('battery','電池1組',96,'単3×4本の目安');add('battery-holder','電池ホルダー',35,'付属する場合');}
+      else if(item.genre==='Filter / hood'){add('case','フィルターケース',20,'樹脂ケース');}
+      else {add('case','純正ケース・袋',28,'付属する場合');}
+      add('box','元箱',w>250?95:w>100?55:30,'箱サイズ別の目安');add('manual','説明書',w>250?35:12,'冊子・折り紙');
+    }
+    return out;
   }
-  function extraWeight(){return [...activeExtras].reduce((sum,id)=>sum+(extras.find(e=>e.id===id)?.g||0),0)+(Number($('#customExtra').value)||0);}
+  function renderExtraPresets(item=selectedItem){
+    currentExtras=accessorySuggestions(item);
+    $('#extraPresets').innerHTML=currentExtras.map(e=>`<label class="accessory-row"><input type="checkbox" data-extra-check="${escapeHtml(e.id)}"><span class="accessory-copy"><strong>${escapeHtml(e.label)}</strong><small>${escapeHtml(e.note||'')}</small></span><span class="accessory-weight"><input type="number" min="0" step="1" value="${e.g}" data-extra-weight="${escapeHtml(e.id)}" aria-label="${escapeHtml(e.label)}の重量"><b>g</b></span></label>`).join('');
+    $$('[data-extra-check]').forEach(el=>el.addEventListener('change',updateCalculatedWeight));
+    $$('[data-extra-weight]').forEach(el=>el.addEventListener('input',()=>{const cb=$(`[data-extra-check="${CSS.escape(el.dataset.extraWeight)}"]`);if(cb&&!cb.checked)cb.checked=true;updateCalculatedWeight()}));
+  }
+  function extraWeight(){
+    const presets=$$('[data-extra-check]:checked').reduce((sum,cb)=>sum+(Number($(`[data-extra-weight="${CSS.escape(cb.dataset.extraCheck)}"]`)?.value)||0),0);
+    return presets+(Number($('#customExtra').value)||0);
+  }
+  function renderPackingBreakdown(){
+    const id=$('#packingProfile').value, p=packingProfiles.get(id), box=$('#packingBreakdown');
+    if(!p){box.innerHTML=`<span>梱包内訳</span><p>手動設定 ${fmtG(Number($('#packingWeight').value)||0)}</p>`;return;}
+    const total=p.components.reduce((s,x)=>s+Number(x[1]),0), target=Number($('#packingWeight').value)||p.defaultG, ratio=total?target/total:1;
+    box.innerHTML=`<span>${escapeHtml(p.method)}・標準 ${fmtG(p.defaultG)}</span><div>${p.components.map(([label,g])=>`<b>${escapeHtml(label)} ${fmtG(Math.round(g*ratio))}</b>`).join('')}</div><p>${escapeHtml(p.note)}</p>`;
+  }
   function currentWeight(){
     const mode=$('input[name="weightMode"]:checked').value;
     if(mode==='measured') return Number($('#measuredWeight').value)||0;
@@ -158,7 +217,9 @@
   $$('input[name="weightMode"]').forEach(r=>r.addEventListener('change',()=>{
     const measured=r.value==='measured'&&r.checked;$('#estimateControls').hidden=measured;$('#measuredControls').hidden=!measured;updateCalculatedWeight();
   }));
-  ['baseWeight','packingWeight','customExtra','measuredWeight'].forEach(id=>$('#'+id).addEventListener('input',updateCalculatedWeight));
+  ['baseWeight','customExtra','measuredWeight'].forEach(id=>$('#'+id).addEventListener('input',updateCalculatedWeight));
+  $('#packingWeight').addEventListener('input',()=>{if(!suppressPackingInput)$('#packingProfile').value='custom';renderPackingBreakdown();updateCalculatedWeight()});
+  $('#packingProfile').addEventListener('change',()=>{const p=packingProfiles.get($('#packingProfile').value);if(p){suppressPackingInput=true;$('#packingWeight').value=p.defaultG;suppressPackingInput=false;$('#packingHelp').textContent=`通常 ${fmtG(p.minG)}〜${fmtG(p.maxG)}。標準値を使用`;}renderPackingBreakdown();updateCalculatedWeight()});
 
   function roundUpX99(value){return Math.round((Math.ceil(value-0.99-1e-9)+0.99)*100)/100;}
   function usOverrideFor(tier,price,rate){
@@ -198,7 +259,7 @@
         ['中国・韓国・台湾',tier.chinaKoreaTaiwan,'国際エアパケット',false],
         ['その他アジア',tier.otherAsia,'国際エアパケット',false],
         ['カナダ・英国・豪州など',tier.zone3,'非EU欧州・中東を含む',false],
-        ['EU加盟国',tier.eu,'SpeedPAK DDP',false],
+        ['EU加盟国',tier.eu,'国際エアパケット・DDU',false],
         ['中南米・アフリカ',tier.zone5,'国際エアパケット',false]
       ];
       $('#shippingCards').innerHTML=cards.map(([label,usd,note,primary])=>`<div class="shipping-card ${primary?'primary':''}"><span>${label}</span><strong>${fmtUsd(usd)}</strong><small>${fmtYen(usd*rate)} · ${note}</small></div>`).join('');
@@ -208,6 +269,7 @@
       if(weightMode!=='measured') warnings.push('推定重量による仮判定です。出品・発送前に梱包後重量を実測してください。');
       if(tier.cpassTierG>DB.policies.model.validatedMaxTierG) warnings.push('1kg超の米国送料モデルは追加見積もり推奨区分です。高額・大型商品はCPaSSで照合してください。');
       if(price>250) warnings.push('250USD超の商品です。補償上限・関税・署名要否も個別に確認してください。');
+      warnings.push('EU向けは日本郵便 国際エアパケットのDDUです。関税・現地通関手数料が購入者へ請求される可能性があります。150ユーロ以下でeBayがVATを徴収した注文は、発送時にIOSS番号を正確に入力してください。');
       if(tier.additionalItem>0) warnings.push(`複数在庫では、同一商品ごとの追加送料${fmtUsd(tier.additionalItem)}が設定されています。`);
       if(weightMode!=='measured' && selectedItem?.dataType==='genre-estimate'&&!localFor(selectedItem)) {
         warnings.push('この商品の個別重量は未収録のため、同ジャンルの上限寄りで計算しています。');
@@ -222,7 +284,7 @@
   }
 
   function renderDatasetSummary(){
-    const m=DB.meta;$('#datasetSummary').innerHTML=[['収録商品',`${fmtNum(m.recordCount)}件`],['参考重量あり',`${fmtNum(m.referenceCount)}件`],['カメラ・レンズ',`${fmtNum(m.cameraCount+m.lensCount)}件`],['ジャンル',`${fmtNum(m.genreCount)}分類`]].map(([l,v])=>`<div class="summary-stat"><strong>${v}</strong><span>${l}</span></div>`).join('');
+    const m=DB.meta;$('#datasetSummary').innerHTML=[['収録商品',`${fmtNum(m.recordCount)}件`],['参考重量あり',`${fmtNum(m.referenceCount)}件`],['アクセサリー',`${fmtNum(m.accessoryCount)}件`],['ジャンル',`${fmtNum(m.genreCount)}分類`]].map(([l,v])=>`<div class="summary-stat"><strong>${v}</strong><span>${l}</span></div>`).join('');
     $('#footerMeta').textContent=`データベース ${fmtNum(m.recordCount)}件（参考重量 ${fmtNum(m.referenceCount)}件／ジャンル推定 ${fmtNum(m.recordCount-m.referenceCount)}件）`;
   }
 
@@ -277,7 +339,7 @@
     const target=(w.min+w.max)/2;
     const similar=DB.items.filter(x=>x.id!==item.id&&x.genre===item.genre&&x.dataType==='reference').sort((a,b)=>Math.abs(Number(a.weightG)-target)-Math.abs(Number(b.weightG)-target)).slice(0,6);
     const similarHtml=similar.length?`<section class="similar-section"><h3>近いジャンルの参考機種</h3><div class="similar-list">${similar.map(x=>`<button type="button" data-similar-id="${escapeHtml(x.id)}"><span>${escapeHtml(x.name)}</span><strong>${fmtG(x.weightG)}</strong></button>`).join('')}</div></section>`:'';
-    $('#dialogContent').innerHTML=`<div class="dialog-body"><span class="item-brand">${escapeHtml(item.brand)} · ${escapeHtml(typeLabel(item.kind))}</span><h2>${escapeHtml(item.name)}</h2><div class="selected-meta"><span class="tag">${escapeHtml(item.genreJa)}</span>${item.format?`<span class="tag">${escapeHtml(item.format)}</span>`:''}${item.mount?`<span class="tag">${escapeHtml(item.mount)}</span>`:''}<span class="quality-badge ${q.cls}">${escapeHtml(q.text)}</span></div><div class="dialog-weight"><div><span>${w.type==='estimate'?'推定重量範囲':'本体・商品重量'}</span><strong>${escapeHtml(itemWeightText(item))}</strong></div><div><span>安全側の推定梱包後重量</span><strong>${fmtG(w.value+item.packingMaxG)}</strong></div></div><dl class="detail-list"><div><dt>重量条件</dt><dd>${escapeHtml(local?.note||item.weightCondition||'—')}</dd></div><div><dt>梱包材の目安</dt><dd>+${fmtG(item.packingMinG)}〜${fmtG(item.packingMaxG)}</dd></div><div><dt>マウント</dt><dd>${escapeHtml(item.mount||'—')}</dd></div><div><dt>フォーカス</dt><dd>${escapeHtml(item.focus||'—')}</dd></div><div><dt>レンズ方式</dt><dd>${escapeHtml(item.lensType||'—')}</dd></div><div><dt>発売年</dt><dd>${item.year||'—'}</dd></div><div><dt>同ジャンル登録数</dt><dd>${g?.count||0}件（参考重量 ${g?.referenceCount||0}件）</dd></div><div><dt>データ品質</dt><dd>${escapeHtml(q.text)}</dd></div></dl>${item.dataType==='genre-estimate'?`<div class="warning-box">この機種の個別重量は未確認です。${escapeHtml(item.genreJa)}の既知データから${fmtG(item.weightMinG)}〜${fmtG(item.weightMaxG)}と推定しています。</div>`:''}${similarHtml}<div class="dialog-actions"><button type="button" class="use-item">配送判定に使う</button><button type="button" class="browse-genre">同ジャンルを見る</button></div></div>`;
+    $('#dialogContent').innerHTML=`<div class="dialog-body"><span class="item-brand">${escapeHtml(item.brand)} · ${escapeHtml(typeLabel(item.kind))}</span><h2>${escapeHtml(item.name)}</h2><div class="selected-meta"><span class="tag">${escapeHtml(item.genreJa)}</span>${item.format?`<span class="tag">${escapeHtml(item.format)}</span>`:''}${item.mount?`<span class="tag">${escapeHtml(item.mount)}</span>`:''}<span class="quality-badge ${q.cls}">${escapeHtml(q.text)}</span></div><div class="dialog-weight"><div><span>${w.type==='estimate'?'推定重量範囲':'本体・商品重量'}</span><strong>${escapeHtml(itemWeightText(item))}</strong></div><div><span>安全側の推定梱包後重量</span><strong>${fmtG(w.value+(item.packingDefaultG??item.packingMaxG))}</strong></div></div><dl class="detail-list"><div><dt>重量条件</dt><dd>${escapeHtml(local?.note||item.weightCondition||'—')}</dd></div><div><dt>梱包材の目安</dt><dd>+${fmtG(item.packingMinG)}〜${fmtG(item.packingMaxG)}（標準 ${fmtG(item.packingDefaultG??item.packingMaxG)}）</dd></div><div><dt>マウント</dt><dd>${escapeHtml(item.mount||'—')}</dd></div><div><dt>フォーカス</dt><dd>${escapeHtml(item.focus||'—')}</dd></div><div><dt>レンズ方式</dt><dd>${escapeHtml(item.lensType||'—')}</dd></div><div><dt>発売年</dt><dd>${item.year||'—'}</dd></div><div><dt>同ジャンル登録数</dt><dd>${g?.count||0}件（参考重量 ${g?.referenceCount||0}件）</dd></div><div><dt>データ品質</dt><dd>${escapeHtml(q.text)}</dd></div></dl>${item.dataType==='genre-estimate'?`<div class="warning-box">この機種の個別重量は未確認です。${escapeHtml(item.genreJa)}の既知データから${fmtG(item.weightMinG)}〜${fmtG(item.weightMaxG)}と推定しています。</div>`:''}${similarHtml}<div class="dialog-actions"><button type="button" class="use-item">配送判定に使う</button><button type="button" class="browse-genre">同ジャンルを見る</button></div></div>`;
     $('.use-item',$('#dialogContent')).addEventListener('click',()=>{$('#itemDialog').close();selectItem(item);setView('judge')});
     $('.browse-genre',$('#dialogContent')).addEventListener('click',()=>{$('#itemDialog').close();$('#genreEstimateSelect').value=item.genre;renderGenreEstimate();setView('genres')});
     $$('[data-similar-id]',$('#dialogContent')).forEach(b=>b.addEventListener('click',()=>openItemDialog(byId.get(b.dataset.similarId))));
@@ -299,7 +361,7 @@
     $$('.genre-card').forEach(c=>c.addEventListener('click',()=>{$('#genreEstimateSelect').value=c.dataset.genre;renderGenreEstimate();$('#genreEstimateSelect').scrollIntoView({behavior:'smooth',block:'center'})}));
   }
   $('#genreEstimateSelect').addEventListener('change',renderGenreEstimate);
-  $('#useGenreEstimate').addEventListener('click',()=>{const g=genreMap.get($('#genreEstimateSelect').value);if(!g)return;const name=$('#unknownProductName').value.trim()||`未登録の${g.genreJa}`;const item={id:`custom-${Date.now()}`,kind:'camera',brand:'未登録',name,aliases:[],genre:g.genre,genreJa:g.genreJa,format:'',focus:'',lensType:'',mount:'',year:null,weightG:null,weightMinG:g.typicalLowG,weightMaxG:g.typicalHighG,weightCondition:'同ジャンルの参考機種から推定',dataType:'genre-estimate',confidence:'D',packingMinG:g.packingMinG,packingMaxG:g.packingMaxG,searchText:name};selectItem(item);setView('judge');showToast('ジャンル推定を判定欄へ反映しました')});
+  $('#useGenreEstimate').addEventListener('click',()=>{const g=genreMap.get($('#genreEstimateSelect').value);if(!g)return;const name=$('#unknownProductName').value.trim()||`未登録の${g.genreJa}`;const item={id:`custom-${Date.now()}`,kind:'camera',brand:'未登録',name,aliases:[],genre:g.genre,genreJa:g.genreJa,format:'',focus:'',lensType:'',mount:'',year:null,weightG:null,weightMinG:g.typicalLowG,weightMaxG:g.typicalHighG,weightCondition:'同ジャンルの参考機種から推定',dataType:'genre-estimate',confidence:'D',packingProfile:'compact-standard',packingDefaultG:Math.round((g.packingMinG+g.packingMaxG)/2),packingMinG:g.packingMinG,packingMaxG:g.packingMaxG,searchText:name};selectItem(item);setView('judge');showToast('ジャンル推定を判定欄へ反映しました')});
 
   function selectLocalItem(item){localSelectedItem=item;$('#localProductSearch').value=item.name;$('#localGenre').value=item.genre;const w=effectiveWeight(item);if(w.type!=='estimate')$('#localBareWeight').value=w.value;$('#localSuggestions').hidden=true;}
   function renderLocalData(){
@@ -308,12 +370,14 @@
     $$('[data-delete-local]').forEach(b=>b.addEventListener('click',()=>{localMeasurements=localMeasurements.filter(x=>x.id!==b.dataset.deleteLocal);saveLocal();renderLocalData();renderDatabase();showToast('実測値を削除しました')}));
     $('#sourceList').innerHTML=DB.sources.map(s=>`<div class="source-row"><strong>${s.url?`<a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">${escapeHtml(s.label)}</a>`:escapeHtml(s.label)}</strong><small>${escapeHtml(s.note)}</small></div>`).join('');
   }
+  function updateLocalDerivedPacking(){const bare=Number($('#localBareWeight').value)||0,packed=Number($('#localPackedWeight').value)||0;const el=$('#localDerivedPacking');if(bare>0&&packed>bare){el.textContent=`梱包材の実測：${fmtG(packed-bare)}（梱包後−本体）`;el.classList.add('ready')}else{el.textContent='本体重量と梱包後重量を入力すると、梱包材重量を自動計算します。';el.classList.remove('ready')}}
+  ['localBareWeight','localPackedWeight'].forEach(id=>$('#'+id).addEventListener('input',updateLocalDerivedPacking));
   $('#localForm').addEventListener('submit',e=>{
     e.preventDefault();const name=$('#localProductSearch').value.trim(),bare=Number($('#localBareWeight').value)||null,packed=Number($('#localPackedWeight').value)||null;
     if(!name||(!bare&&!packed)){showToast('商品名と、どちらかの重量を入力してください');return;}
-    const entry={id:`local-${Date.now()}`,itemId:localSelectedItem?.id||null,name,brand:localSelectedItem?.brand||'',genre:$('#localGenre').value,bareWeight:bare,packedWeight:packed,note:$('#localNote').value.trim(),updatedAt:new Date().toISOString()};
+    const entry={id:`local-${Date.now()}`,itemId:localSelectedItem?.id||null,name,brand:localSelectedItem?.brand||'',genre:$('#localGenre').value,bareWeight:bare,packedWeight:packed,packingWeight:(bare&&packed&&packed>bare)?packed-bare:null,note:$('#localNote').value.trim(),updatedAt:new Date().toISOString()};
     localMeasurements=localMeasurements.filter(x=>!(entry.itemId&&x.itemId===entry.itemId)&&normalize(x.name)!==normalize(entry.name));localMeasurements.unshift(entry);saveLocal();
-    e.target.reset();localSelectedItem=null;renderLocalData();renderDatabase();showToast('実測値を保存しました');
+    e.target.reset();localSelectedItem=null;updateLocalDerivedPacking();renderLocalData();renderDatabase();showToast('実測値を保存しました');
   });
   $('#exportLocal').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({version:1,measurements:localMeasurements},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='film-camera-measurements.json';a.click();URL.revokeObjectURL(a.href)});
   $('#importLocal').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text());const rows=Array.isArray(data)?data:data.measurements;if(!Array.isArray(rows))throw new Error();localMeasurements=rows;saveLocal();renderLocalData();showToast('実測データを読み込みました')}catch{showToast('JSONファイルを読み込めませんでした')}e.target.value=''});
@@ -325,7 +389,7 @@
   }
 
   function init(){
-    initTheme();populateFilters();renderExtraPresets();renderDatasetSummary();renderCoverage();initSearches();renderGenres();renderLocalData();
+    initTheme();populateFilters();$('#packingProfile').insertAdjacentHTML('beforeend',(DB.packingProfiles||[]).map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.label)}（${p.defaultG}g）</option>`).join(''));renderExtraPresets();renderPackingBreakdown();$('#clearExtras').addEventListener('click',()=>{$$('[data-extra-check]').forEach(x=>x.checked=false);$('#customExtra').value=0;updateCalculatedWeight()});renderDatasetSummary();renderCoverage();initSearches();renderGenres();renderLocalData();
     const savedRate=Number(storageGet('filmCameraExchangeRate'));if(savedRate>0)$('#exchangeRate').value=savedRate;
     $('#judgeForm').addEventListener('submit',judge);$('#copyPolicy').addEventListener('click',async()=>{const t=$('#policyName').textContent;if(!t||t==='V2ポリシー対象外')return;try{await navigator.clipboard.writeText(t)}catch{const ta=document.createElement('textarea');ta.value=t;document.body.append(ta);ta.select();document.execCommand('copy');ta.remove()}showToast('ポリシー名をコピーしました')});$('#copyUsOverride').addEventListener('click',async()=>{const t=$('#usOverride').textContent.replace('$','');if(!t||t==='—')return;try{await navigator.clipboard.writeText(t)}catch{const ta=document.createElement('textarea');ta.value=t;document.body.append(ta);ta.select();document.execCommand('copy');ta.remove()}showToast('米国送料をコピーしました')});
     const initial=(location.hash||'#judge').slice(1);if(['judge','database','genres','data'].includes(initial))setView(initial);

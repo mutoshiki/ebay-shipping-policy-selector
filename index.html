@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="description" content="レンジファインダー・コンパクトを拡充したフィルムカメラ重量・eBay配送ポリシー判定ツール">
+  <meta name="description" content="商品別の梱包資材・付属品重量まで予測するフィルムカメラ重量・eBay配送ポリシー判定ツール">
   <meta name="theme-color" content="#111827">
-  <title>Film Camera Shipping Guide V4</title>
+  <title>Film Camera Shipping Guide V6</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
     <div class="header-inner">
       <a class="brand" href="#judge" aria-label="トップへ">
         <span class="brand-mark" aria-hidden="true">FC</span>
-        <span><strong>Film Camera Shipping Guide</strong><small>重量データベース × eBay送料V2</small></span>
+        <span><strong>Film Camera Shipping Guide</strong><small>商品別梱包プロファイル × eBay送料V2.1（EU DDU）</small></span>
       </a>
       <button id="themeToggle" class="icon-button" type="button" aria-label="表示テーマを切り替える">◐</button>
     </div>
@@ -29,7 +29,7 @@
     <section id="view-judge" class="view is-active" data-view-panel="judge">
       <div class="page-heading">
         <div><p class="eyebrow">SHIPPING POLICY SELECTOR</p><h1>商品名から重量を調べて、V2配送ポリシーと送料を判定</h1></div>
-        <p>運用中の20個の重量別ポリシーに対応しています。米国は商品価格に応じた個別上書き送料、米国以外は地域別の送料一覧額を表示します。</p>
+        <p>運用中の20個の重量別ポリシーに対応しています。米国は商品価格に応じた個別上書き送料、EUを含む米国以外は日本郵便の地域別送料一覧額を表示します。</p>
       </div>
 
       <div class="judge-layout">
@@ -60,11 +60,13 @@
           <div id="estimateControls">
             <div class="field-grid">
               <div class="field"><label for="baseWeight">本体・商品重量 <span>g</span></label><input id="baseWeight" type="number" inputmode="decimal" min="0" step="1" placeholder="商品選択で自動入力"><small id="baseWeightHelp">手動修正できます</small></div>
+              <div class="field"><label for="packingProfile">梱包方法</label><select id="packingProfile"><option value="custom">手動設定</option></select><small>商品を選ぶと推奨方法を自動選択</small></div>
               <div class="field"><label for="packingWeight">梱包材の加算 <span>g</span></label><input id="packingWeight" type="number" inputmode="decimal" min="0" step="1" value="200"><small id="packingHelp">箱・緩衝材・袋など</small></div>
+              <div id="packingBreakdown" class="packing-breakdown"><span>梱包内訳</span><p>商品を選ぶと資材ごとの予測を表示します。</p></div>
             </div>
             <div class="extras-block">
-              <div class="subheading"><h3>追加する付属品</h3><button id="clearExtras" class="text-button" type="button">選択を解除</button></div>
-              <div id="extraPresets" class="chip-grid"></div>
+              <div class="subheading"><div><h3>付属品を追加</h3><p>商品に合う候補だけを表示。重量は個別に修正できます。</p></div><button id="clearExtras" class="text-button" type="button">選択を解除</button></div>
+              <div id="extraPresets" class="accessory-list"></div>
               <div class="field compact-field"><label for="customExtra">その他の追加重量 <span>g</span></label><input id="customExtra" type="number" inputmode="decimal" min="0" step="1" value="0"></div>
             </div>
           </div>
@@ -88,7 +90,7 @@
               <div><dt>商品価格</dt><dd id="resultPrice"></dd></div>
               <div><dt>CPaSS請求区分</dt><dd id="resultPriceTier"></dd></div><div><dt>国際送料一覧</dt><dd id="resultRateTable"></dd></div>
             </dl>
-            <section class="shipping-section"><div class="subheading"><h3>購入者に表示される送料</h3><span id="rateCaption"></span></div><div id="shippingCards" class="shipping-cards"></div><p class="micro-note">米国は出品ごとの上書き額です。米国以外は選択したINT-AP送料一覧の固定額です。</p></section>
+            <section class="shipping-section"><div class="subheading"><h3>購入者に表示される送料</h3><span id="rateCaption"></span></div><div id="shippingCards" class="shipping-cards"></div><p class="micro-note">米国は出品ごとの上書き額です。EUを含む米国以外はINT-AP送料一覧の固定額です。EUは日本郵便 国際エアパケット・DDUです。</p></section>
             <div id="resultWarning" class="warning-box" hidden></div>
             <div id="resultManual" class="manual-box" hidden></div>
           </div>
@@ -143,6 +145,7 @@
             <div class="field"><label for="localPackedWeight">梱包後重量 <span>g</span></label><input id="localPackedWeight" type="number" min="0" step="0.1" placeholder="任意"></div>
           </div>
           <div class="field"><label for="localGenre">ジャンル</label><select id="localGenre"></select></div>
+          <div id="localDerivedPacking" class="derived-packing">本体重量と梱包後重量を入力すると、梱包材重量を自動計算します。</div>
           <div class="field"><label for="localNote">メモ</label><textarea id="localNote" rows="3" placeholder="元箱あり、レンズキャップ込み、箱サイズなど"></textarea></div>
           <button class="primary-button" type="submit">この端末に保存</button>
         </form>
@@ -157,7 +160,7 @@
 
   <dialog id="itemDialog" class="item-dialog"><button id="closeDialog" class="dialog-close" type="button" aria-label="閉じる">×</button><div id="dialogContent"></div></dialog>
   <div id="toast" class="toast" role="status" hidden></div>
-  <footer class="site-footer"><p>重量は仕様違い・付属品・電池・フィルムで変わります。最終判断は梱包後の実測値を使用してください。</p><p id="footerMeta"></p></footer>
+  <footer class="site-footer"><p>梱包予測は商品別の資材内訳と付属品を反映します。最終判断はすべて入れた梱包後の実測値を使用してください。</p><p id="footerMeta"></p></footer>
   <script src="data/database.js"></script>
   <script src="app.js"></script>
 </body>
