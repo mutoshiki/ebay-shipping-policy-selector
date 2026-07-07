@@ -5,102 +5,150 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="description" content="商品別の梱包資材・付属品重量まで予測するフィルムカメラ重量・eBay配送ポリシー判定ツール">
   <meta name="theme-color" content="#111827">
-  <title>Film Camera Shipping Guide V6</title>
+  <title>Film Camera Shipping Guide V7</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="site-header">
     <div class="header-inner">
-      <a class="brand" href="#judge" aria-label="トップへ">
+      <a class="brand" href="#judge" aria-label="配送判定へ">
         <span class="brand-mark" aria-hidden="true">FC</span>
-        <span><strong>Film Camera Shipping Guide</strong><small>商品別梱包プロファイル × eBay送料V2.1（EU DDU）</small></span>
+        <span><strong>Film Camera Shipping Guide</strong><small>商品別梱包 × eBay送料V2.1（EU DDU）</small></span>
       </a>
       <button id="themeToggle" class="icon-button" type="button" aria-label="表示テーマを切り替える">◐</button>
     </div>
     <nav class="main-nav" aria-label="メインメニュー">
-      <button class="nav-button is-active" data-view="judge" type="button">配送判定</button>
-      <button class="nav-button" data-view="database" type="button">重量データベース</button>
-      <button class="nav-button" data-view="genres" type="button">ジャンルから予測</button>
-      <button class="nav-button" data-view="data" type="button">実測データ</button>
+      <button class="nav-button is-active" data-view="judge" type="button"><span aria-hidden="true">⌕</span><b>判定</b></button>
+      <button class="nav-button" data-view="history" type="button"><span aria-hidden="true">↺</span><b>履歴</b><em id="navHistoryCount" hidden>0</em></button>
+      <button class="nav-button" data-view="tools" type="button"><span aria-hidden="true">▦</span><b>ツール</b></button>
     </nav>
   </header>
 
   <main class="page-shell">
     <section id="view-judge" class="view is-active" data-view-panel="judge">
-      <div class="page-heading">
-        <div><p class="eyebrow">SHIPPING POLICY SELECTOR</p><h1>商品名から重量を調べて、V2配送ポリシーと送料を判定</h1></div>
-        <p>運用中の20個の重量別ポリシーに対応しています。米国は商品価格に応じた個別上書き送料、EUを含む米国以外は日本郵便の地域別送料一覧額を表示します。</p>
+      <div class="page-heading judge-heading">
+        <div><p class="eyebrow">SHIPPING SELECTOR</p><h1>商品を選んで、送料と配送ポリシーをすぐ判定</h1></div>
+        <p>普段使う項目だけを表示しています。梱包材や付属品は「詳細調整」から変更できます。</p>
       </div>
 
       <div class="judge-layout">
         <form id="judgeForm" class="panel form-panel" novalidate>
-          <div class="section-title"><span>1</span><div><h2>商品を検索</h2><p>英語名、日本語メーカー名、型番、別名に対応</p></div></div>
+          <div class="section-title"><span>1</span><div><h2>商品</h2><p>型番や別名でも検索できます</p></div></div>
           <div class="search-combobox" id="judgeSearchBox">
             <label for="productSearch">商品名・型番</label>
-            <div class="search-input-wrap"><span aria-hidden="true">⌕</span><input id="productSearch" type="search" autocomplete="off" placeholder="例：Nikon F3、DG-2、Autoboy 3"></div>
+            <div class="search-input-wrap"><span aria-hidden="true">⌕</span><input id="productSearch" type="search" autocomplete="off" placeholder="例：Ricoh TF-500D、Hi-Matic E、AR-2"></div>
             <div id="searchSuggestions" class="suggestions" role="listbox" hidden></div>
           </div>
-          <div id="selectedItemCard" class="selected-item empty-state-small">
-            商品を選ぶと、重量と梱包目安を表示します。
-          </div>
+          <div id="selectedItemCard" class="selected-item empty-state-small">商品を選ぶと、重量と推奨梱包を自動入力します。</div>
 
           <div class="section-divider"></div>
-          <div class="section-title"><span>2</span><div><h2>価格と梱包条件</h2><p>価格は送料を除いたeBayの商品価格</p></div></div>
-          <div class="field-grid">
-            <div class="field"><label for="priceUsd">商品価格 <span>USD</span></label><input id="priceUsd" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="89.99"><small id="priceError" class="field-error"></small></div>
-            <div class="field"><label for="exchangeRate">ドル円レート <span>円/USD</span></label><input id="exchangeRate" type="number" inputmode="decimal" min="1" step="0.01" value="150"><small>端末に保存。米国送料は手数料15%・梱包余裕200円で計算</small></div>
-          </div>
+          <div class="section-title"><span>2</span><div><h2>価格と重量</h2><p>通常は自動見積もりのままで判定できます</p></div></div>
+          <div class="field price-field"><label for="priceUsd">商品価格 <span>USD・送料を除く</span></label><input id="priceUsd" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="89.99"><small id="priceError" class="field-error"></small></div>
 
-          <fieldset class="weight-mode">
-            <legend>判定に使う重量</legend>
-            <label class="radio-card"><input type="radio" name="weightMode" value="estimate" checked><span><strong>データから見積もる</strong><small>本体重量＋梱包材＋追加品</small></span></label>
-            <label class="radio-card"><input type="radio" name="weightMode" value="measured"><span><strong>梱包後の実測値を使う</strong><small>最も正確な方法</small></span></label>
+          <fieldset class="weight-mode compact-mode">
+            <legend>重量の決め方</legend>
+            <label class="radio-card"><input type="radio" name="weightMode" value="estimate" checked><span><strong>自動見積もり</strong><small>商品＋推奨梱包</small></span></label>
+            <label class="radio-card"><input type="radio" name="weightMode" value="measured"><span><strong>実測重量</strong><small>梱包済みならこちら</small></span></label>
           </fieldset>
 
           <div id="estimateControls">
-            <div class="field-grid">
-              <div class="field"><label for="baseWeight">本体・商品重量 <span>g</span></label><input id="baseWeight" type="number" inputmode="decimal" min="0" step="1" placeholder="商品選択で自動入力"><small id="baseWeightHelp">手動修正できます</small></div>
-              <div class="field"><label for="packingProfile">梱包方法</label><select id="packingProfile"><option value="custom">手動設定</option></select><small>商品を選ぶと推奨方法を自動選択</small></div>
-              <div class="field"><label for="packingWeight">梱包材の加算 <span>g</span></label><input id="packingWeight" type="number" inputmode="decimal" min="0" step="1" value="200"><small id="packingHelp">箱・緩衝材・袋など</small></div>
-              <div id="packingBreakdown" class="packing-breakdown"><span>梱包内訳</span><p>商品を選ぶと資材ごとの予測を表示します。</p></div>
-            </div>
-            <div class="extras-block">
-              <div class="subheading"><div><h3>付属品を追加</h3><p>商品に合う候補だけを表示。重量は個別に修正できます。</p></div><button id="clearExtras" class="text-button" type="button">選択を解除</button></div>
-              <div id="extraPresets" class="accessory-list"></div>
-              <div class="field compact-field"><label for="customExtra">その他の追加重量 <span>g</span></label><input id="customExtra" type="number" inputmode="decimal" min="0" step="1" value="0"></div>
-            </div>
+            <details id="packingDetails" class="disclosure">
+              <summary><span><b>梱包・付属品を詳細調整</b><small id="packingSummaryText">商品ごとの推奨値を使用</small></span><i aria-hidden="true">⌄</i></summary>
+              <div class="disclosure-body">
+                <div class="field-grid">
+                  <div class="field"><label for="baseWeight">本体・商品重量 <span>g</span></label><input id="baseWeight" type="number" inputmode="decimal" min="0" step="1" placeholder="商品選択で自動入力"><small id="baseWeightHelp">手動修正できます</small></div>
+                  <div class="field"><label for="packingProfile">梱包方法</label><select id="packingProfile"><option value="custom">手動設定</option></select><small>商品ごとの梱包方法を自動選択</small></div>
+                  <div class="field"><label for="packingWeight">梱包材の加算 <span>g</span></label><input id="packingWeight" type="number" inputmode="decimal" min="0" step="1" value="200"><small id="packingHelp">箱・緩衝材・袋など</small></div>
+                  <div id="packingBreakdown" class="packing-breakdown"><span>梱包内訳</span><p>商品を選ぶと資材ごとの予測を表示します。</p></div>
+                </div>
+                <div class="extras-block">
+                  <div class="subheading"><div><h3>付属品</h3><p>付属する物だけ選択。重量も修正できます。</p></div><button id="clearExtras" class="text-button" type="button">選択解除</button></div>
+                  <div id="extraPresets" class="accessory-list"></div>
+                  <div class="field compact-field"><label for="customExtra">その他の追加重量 <span>g</span></label><input id="customExtra" type="number" inputmode="decimal" min="0" step="1" value="0"></div>
+                </div>
+              </div>
+            </details>
           </div>
 
-          <div id="measuredControls" class="field" hidden><label for="measuredWeight">梱包後の実測重量 <span>g</span></label><input id="measuredWeight" type="number" inputmode="decimal" min="0.1" step="0.1" placeholder="例：742"><small>箱を閉じ、付属品をすべて入れた状態で計測</small></div>
+          <div id="measuredControls" class="field measured-card" hidden><label for="measuredWeight">梱包後の実測重量 <span>g</span></label><input id="measuredWeight" type="number" inputmode="decimal" min="0.1" step="0.1" placeholder="例：742"><small>付属品をすべて入れ、箱を閉じた状態で計量</small></div>
 
-          <div class="weight-summary"><span>判定重量</span><strong id="calculatedWeight">—</strong><small id="weightSummaryNote">商品を選択してください</small></div>
-          <button id="judgeButton" class="primary-button" type="submit">配送ポリシーを判定</button>
+          <details class="disclosure settings-disclosure">
+            <summary><span><b>計算設定</b><small>通常は変更不要</small></span><i aria-hidden="true">⌄</i></summary>
+            <div class="disclosure-body"><div class="field"><label for="exchangeRate">ドル円レート <span>円/USD</span></label><input id="exchangeRate" type="number" inputmode="decimal" min="1" step="0.01" value="150"><small>端末に保存。米国送料は手数料15%・梱包余裕200円で計算</small></div></div>
+          </details>
+
+          <div class="judge-action-area">
+            <div class="weight-summary"><span>判定重量</span><strong id="calculatedWeight">—</strong><small id="weightSummaryNote">商品を選択してください</small></div>
+            <button id="judgeButton" class="primary-button" type="submit">送料を判定</button>
+          </div>
         </form>
 
         <aside class="panel result-panel" id="resultPanel" aria-live="polite">
           <div class="result-header"><div><p class="eyebrow">RESULT</p><h2>判定結果</h2></div><span id="resultStatus" class="status neutral">未判定</span></div>
-          <div id="resultEmpty" class="result-empty"><div class="empty-icon">↗</div><p>商品・価格・重量を入力して判定してください。</p></div>
+          <div id="resultEmpty" class="result-empty">
+            <div class="empty-icon">↗</div><p>商品・価格を入力して判定してください。</p>
+            <div id="recentResultHistory" class="recent-result-history" hidden></div>
+          </div>
           <div id="resultContent" hidden>
-            <div class="policy-block"><small>選択する配送ポリシー</small><div class="policy-copy-row"><code id="policyName"></code><button id="copyPolicy" type="button">コピー</button></div></div>
-            <div class="override-block"><small>この出品のみ上書きする米国送料</small><div class="policy-copy-row"><code id="usOverride"></code><button id="copyUsOverride" type="button">コピー</button></div><p>配送ポリシーを選択後、米国向けの購入者負担額へ入力します。</p></div>
-            <dl class="result-facts">
-              <div><dt>商品</dt><dd id="resultProduct"></dd></div>
-              <div><dt>判定重量</dt><dd id="resultWeight"></dd></div>
-              <div><dt>重量区分</dt><dd id="resultWeightTier"></dd></div>
-              <div><dt>商品価格</dt><dd id="resultPrice"></dd></div>
-              <div><dt>CPaSS請求区分</dt><dd id="resultPriceTier"></dd></div><div><dt>国際送料一覧</dt><dd id="resultRateTable"></dd></div>
-            </dl>
-            <section class="shipping-section"><div class="subheading"><h3>購入者に表示される送料</h3><span id="rateCaption"></span></div><div id="shippingCards" class="shipping-cards"></div><p class="micro-note">米国は出品ごとの上書き額です。EUを含む米国以外はINT-AP送料一覧の固定額です。EUは日本郵便 国際エアパケット・DDUです。</p></section>
+            <div class="result-primary-grid">
+              <div class="policy-block"><small>配送ポリシー</small><div class="policy-copy-row"><code id="policyName"></code><button id="copyPolicy" type="button">コピー</button></div></div>
+              <div class="override-block"><small>米国送料の上書き額</small><div class="policy-copy-row"><code id="usOverride"></code><button id="copyUsOverride" type="button">コピー</button></div></div>
+            </div>
+            <div class="result-save-row"><span id="historySaveState">判定すると履歴へ自動保存されます</span><button type="button" data-open-view="history">履歴を見る</button></div>
             <div id="resultWarning" class="warning-box" hidden></div>
             <div id="resultManual" class="manual-box" hidden></div>
+            <details class="disclosure result-disclosure">
+              <summary><span><b>地域別送料・計算の詳細</b><small>国際送料一覧と判定条件</small></span><i aria-hidden="true">⌄</i></summary>
+              <div class="disclosure-body">
+                <dl class="result-facts">
+                  <div><dt>商品</dt><dd id="resultProduct"></dd></div>
+                  <div><dt>判定重量</dt><dd id="resultWeight"></dd></div>
+                  <div><dt>重量区分</dt><dd id="resultWeightTier"></dd></div>
+                  <div><dt>商品価格</dt><dd id="resultPrice"></dd></div>
+                  <div><dt>CPaSS請求区分</dt><dd id="resultPriceTier"></dd></div>
+                  <div><dt>国際送料一覧</dt><dd id="resultRateTable"></dd></div>
+                </dl>
+                <section class="shipping-section"><div class="subheading"><h3>購入者に表示される送料</h3><span id="rateCaption"></span></div><div id="shippingCards" class="shipping-cards"></div><p class="micro-note">米国は出品ごとの上書き額。EUは日本郵便 国際エアパケット・DDUです。</p></section>
+              </div>
+            </details>
           </div>
         </aside>
       </div>
+    </section>
 
-      <section class="summary-strip" id="datasetSummary"></section>
+    <section id="view-history" class="view" data-view-panel="history" hidden>
+      <div class="page-heading compact"><div><p class="eyebrow">HISTORY</p><h1>判定履歴</h1></div><p>判定結果はこの端末に自動保存されます。過去の条件をそのまま呼び戻せます。</p></div>
+      <div class="history-toolbar panel">
+        <div class="history-search"><label for="historySearch">履歴を検索</label><input id="historySearch" type="search" placeholder="商品名・ポリシー名"></div>
+        <div class="history-meta"><strong id="historyCount">0件</strong><span>最大100件を保存</span></div>
+      </div>
+      <div id="historyList" class="history-list"></div>
+      <div id="historyEmpty" class="panel history-empty"><span>↺</span><h2>履歴はまだありません</h2><p>配送判定を行うと自動的に保存されます。</p><button type="button" data-open-view="judge">最初の判定をする</button></div>
+      <details class="panel history-management disclosure">
+        <summary><span><b>履歴データの管理</b><small>書き出し・読み込み・全削除</small></span><i aria-hidden="true">⌄</i></summary>
+        <div class="disclosure-body history-management-actions">
+          <button id="exportHistory" type="button">JSONを書き出す</button>
+          <label class="file-button">JSONを読み込む<input id="importHistory" type="file" accept="application/json"></label>
+          <button id="clearHistory" class="danger-button" type="button">履歴をすべて削除</button>
+        </div>
+      </details>
+    </section>
+
+    <section id="view-tools" class="view" data-view-panel="tools" hidden>
+      <div class="page-heading compact"><div><p class="eyebrow">TOOLS</p><h1>必要なときだけ使う補助ツール</h1></div><p>データベースや実測登録は、日常の判定画面から分けました。</p></div>
+      <div class="tool-grid">
+        <button type="button" class="tool-card panel" data-open-view="database"><span aria-hidden="true">⌕</span><div><h2>重量データベース</h2><p>機種を一覧で検索し、重量・梱包情報を確認</p></div><i>→</i></button>
+        <button type="button" class="tool-card panel" data-open-view="genres"><span aria-hidden="true">≈</span><div><h2>ジャンルから予測</h2><p>未登録機種を似た種類の重量分布から推定</p></div><i>→</i></button>
+        <button type="button" class="tool-card panel" data-open-view="data"><span aria-hidden="true">＋</span><div><h2>実測データ</h2><p>本体重量・梱包後重量を端末に保存</p></div><i>→</i></button>
+      </div>
+      <details class="panel dataset-disclosure disclosure">
+        <summary><span><b>収録データの概要</b><small>データ件数と品質</small></span><i aria-hidden="true">⌄</i></summary>
+        <div class="disclosure-body"><section class="summary-strip" id="datasetSummary"></section></div>
+      </details>
     </section>
 
     <section id="view-database" class="view" data-view-panel="database" hidden>
+      <div class="subview-bar"><button type="button" data-open-view="tools">← ツールへ戻る</button></div>
       <div class="page-heading compact"><div><p class="eyebrow">DATABASE</p><h1>フィルムカメラ重量データベース</h1></div><p>公称・参考重量と、同ジャンルの推定範囲を区別して収録しています。</p></div>
       <div class="toolbar panel">
         <div class="db-search"><label for="dbSearch">検索</label><input id="dbSearch" type="search" placeholder="メーカー、機種名、型番、別名"></div>
@@ -120,7 +168,9 @@
       <div class="pagination"><button id="prevPage" type="button">前へ</button><span id="pageInfo"></span><button id="nextPage" type="button">次へ</button></div>
     </section>
 
+
     <section id="view-genres" class="view" data-view-panel="genres" hidden>
+      <div class="subview-bar"><button type="button" data-open-view="tools">← ツールへ戻る</button></div>
       <div class="page-heading compact"><div><p class="eyebrow">GENRE ESTIMATOR</p><h1>ジャンル別の重さから未登録品を予測</h1></div><p>同じジャンル内の既知機種を比較し、未登録カメラの安全な重量帯を判断できます。</p></div>
       <div class="genre-estimator panel">
         <div class="genre-inputs">
@@ -133,7 +183,9 @@
       <div id="genreGrid" class="genre-grid"></div>
     </section>
 
+
     <section id="view-data" class="view" data-view-panel="data" hidden>
+      <div class="subview-bar"><button type="button" data-open-view="tools">← ツールへ戻る</button></div>
       <div class="page-heading compact"><div><p class="eyebrow">LOCAL MEASUREMENTS</p><h1>自分の実測データを蓄積</h1></div><p>同じ商品を再出品するときは、過去の梱包実測値を最優先で呼び出せます。データは端末内だけに保存されます。</p></div>
       <div class="data-layout">
         <form id="localForm" class="panel">
@@ -156,11 +208,12 @@
       </div>
       <section class="panel source-panel"><h2>データの見方と出典</h2><div id="sourceList"></div><div class="quality-legend"><p><b>B 参考重量</b>：公開仕様として一般的に掲載される代表値。構成違いに注意。</p><p><b>D ジャンル推定</b>：同ジャンルの参考重量分布から算出。実測前の仮判定用。</p><p><b>実測</b>：この端末に保存した値。梱包条件が同じなら最優先。</p></div></section>
     </section>
+
   </main>
 
   <dialog id="itemDialog" class="item-dialog"><button id="closeDialog" class="dialog-close" type="button" aria-label="閉じる">×</button><div id="dialogContent"></div></dialog>
   <div id="toast" class="toast" role="status" hidden></div>
-  <footer class="site-footer"><p>梱包予測は商品別の資材内訳と付属品を反映します。最終判断はすべて入れた梱包後の実測値を使用してください。</p><p id="footerMeta"></p></footer>
+  <footer class="site-footer"><p>最終判断は、付属品をすべて入れた梱包後の実測値を使用してください。</p><p id="footerMeta"></p></footer>
   <script src="data/database.js"></script>
   <script src="app.js"></script>
 </body>

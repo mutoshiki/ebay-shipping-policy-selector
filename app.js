@@ -23,6 +23,7 @@
   let currentExtras = [];
   let suppressPackingInput = false;
   let localMeasurements = loadLocal();
+  let judgementHistory = loadHistory();
   let toastTimer;
   const memoryStorage = new Map();
   function storageGet(key){ try { return window.localStorage.getItem(key); } catch { return memoryStorage.get(key) ?? null; } }
@@ -33,6 +34,11 @@
     catch { return []; }
   }
   function saveLocal(){storageSet('filmCameraMeasurements',JSON.stringify(localMeasurements));}
+  function loadHistory(){
+    try { const value=JSON.parse(storageGet('filmCameraJudgementHistoryV1')||'[]'); return Array.isArray(value)?value:[]; }
+    catch { return []; }
+  }
+  function saveHistory(){storageSet('filmCameraJudgementHistoryV1',JSON.stringify(judgementHistory.slice(0,100)));}
   function localFor(item){
     if(!item) return null;
     return localMeasurements.find(x => x.itemId===item.id) || localMeasurements.find(x => normalize(x.name)===normalize(item.name));
@@ -94,9 +100,11 @@
   }
 
   function setView(view){
-    $$('.nav-button').forEach(b=>b.classList.toggle('is-active',b.dataset.view===view));
+    const mainView=['database','genres','data'].includes(view)?'tools':view;
+    $$('.nav-button').forEach(b=>b.classList.toggle('is-active',b.dataset.view===mainView));
     $$('[data-view-panel]').forEach(panel=>{const active=panel.dataset.viewPanel===view;panel.hidden=!active;panel.classList.toggle('is-active',active)});
     history.replaceState(null,'',`#${view}`);
+    if(view==='history') renderHistory();
     if(view==='database') renderDatabase();
     if(view==='genres') renderGenres();
     if(view==='data') renderLocalData();
@@ -213,6 +221,11 @@
     if(mode==='measured') $('#weightSummaryNote').textContent=value>0?'梱包後の実測値をそのまま使用':'梱包後重量を入力してください';
     else if(value>0) $('#weightSummaryNote').textContent=`商品 ${fmtG(Number($('#baseWeight').value)||0)} ＋ 梱包・付属品 ${fmtG(value-(Number($('#baseWeight').value)||0))}`;
     else $('#weightSummaryNote').textContent='商品を選択するか重量を入力してください';
+    const ps=$('#packingSummaryText'); if(ps){
+      if(mode==='measured') ps.textContent='実測重量を使用';
+      else if(value>0) ps.textContent=`本体＋梱包・付属品 = ${fmtG(value)}`;
+      else ps.textContent='商品ごとの推奨値を使用';
+    }
   }
   $$('input[name="weightMode"]').forEach(r=>r.addEventListener('change',()=>{
     const measured=r.value==='measured'&&r.checked;$('#estimateControls').hidden=measured;$('#measuredControls').hidden=!measured;updateCalculatedWeight();
@@ -280,7 +293,84 @@
       }
       if(warnings.length){$('#resultWarning').textContent=warnings.join(' ');$('#resultWarning').hidden=false;}
     }
+    const tier=result.tier;
+    addHistoryEntry({
+      product,itemId:selectedItem?.id||null,price,rate,weight,weightMode:$('input[name="weightMode"]:checked').value,
+      baseWeight:Number($('#baseWeight').value)||null,packingProfile:$('#packingProfile').value,packingWeight:Number($('#packingWeight').value)||0,
+      measuredWeight:Number($('#measuredWeight').value)||null,customExtra:Number($('#customExtra').value)||0,selectedExtras:selectedExtrasSnapshot(),
+      policyName:result.manual?null:result.name,rateTableName:tier?.rateTableName||null,usOverride:result.manual?null:result.usOverride,
+      regional:tier?{chinaKoreaTaiwan:tier.chinaKoreaTaiwan,otherAsia:tier.otherAsia,zone3:tier.zone3,eu:tier.eu,zone5:tier.zone5}:null
+    });
     requestAnimationFrame(()=>{if(innerWidth<1000)$('#resultPanel').scrollIntoView({behavior:'smooth',block:'start'})});
+  }
+
+
+  function selectedExtrasSnapshot(){
+    return $$('[data-extra-check]:checked').map(cb=>{
+      const id=cb.dataset.extraCheck, source=currentExtras.find(x=>x.id===id);
+      return {id,label:source?.label||id,weight:Number($(`[data-extra-weight="${CSS.escape(id)}"]`)?.value)||0};
+    });
+  }
+  function addHistoryEntry(entry){
+    const signature=[entry.itemId||entry.product,entry.price,entry.weight,entry.policyName,entry.usOverride].join('|');
+    judgementHistory=judgementHistory.filter(x=>x.signature!==signature);
+    judgementHistory.unshift({...entry,signature,id:`h-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,createdAt:new Date().toISOString()});
+    judgementHistory=judgementHistory.slice(0,100);saveHistory();renderHistoryNav();renderRecentResultHistory();
+    const state=$('#historySaveState');if(state)state.textContent='この判定を履歴へ自動保存しました';
+  }
+  function renderHistoryNav(){
+    const badge=$('#navHistoryCount');if(!badge)return;
+    badge.textContent=judgementHistory.length>99?'99+':String(judgementHistory.length);badge.hidden=!judgementHistory.length;
+  }
+  function formatHistoryDate(value){
+    const d=new Date(value);if(Number.isNaN(d.getTime()))return '';
+    return new Intl.DateTimeFormat('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(d);
+  }
+  function historyCard(entry,compact=false){
+    const eu=entry.regional?.eu;
+    if(compact)return `<button type="button" class="recent-history-item" data-restore-history="${escapeHtml(entry.id)}"><span>${escapeHtml(entry.product)}</span><b>${escapeHtml(entry.policyName||'個別確認')}</b><small>${fmtUsd(entry.price)} · ${fmtG(entry.weight)}</small></button>`;
+    return `<article class="history-card panel"><div class="history-card-main"><div class="history-card-title"><div><span>${formatHistoryDate(entry.createdAt)}</span><h2>${escapeHtml(entry.product)}</h2></div><button type="button" class="history-delete" data-delete-history="${escapeHtml(entry.id)}" aria-label="履歴を削除">×</button></div><div class="history-key-values"><div><span>配送ポリシー</span><strong>${escapeHtml(entry.policyName||'個別確認')}</strong></div><div><span>米国送料</span><strong>${entry.usOverride!=null?fmtUsd(entry.usOverride):'—'}</strong></div><div><span>商品価格</span><strong>${fmtUsd(entry.price)}</strong></div><div><span>判定重量</span><strong>${fmtG(entry.weight)}</strong></div></div>${eu!=null?`<p class="history-region-note">EU ${fmtUsd(eu)} · ${entry.weightMode==='measured'?'実測':'自動見積もり'}</p>`:''}</div><div class="history-card-actions"><button type="button" data-restore-history="${escapeHtml(entry.id)}">条件を再利用</button><button type="button" data-copy-history-policy="${escapeHtml(entry.id)}">ポリシーをコピー</button></div></article>`;
+  }
+  function renderRecentResultHistory(){
+    const box=$('#recentResultHistory');if(!box)return;
+    if(!judgementHistory.length){box.hidden=true;box.innerHTML='';return;}
+    box.innerHTML=`<span>最近の判定</span>${judgementHistory.slice(0,3).map(x=>historyCard(x,true)).join('')}<button type="button" class="recent-history-all" data-open-view="history">すべて見る</button>`;box.hidden=false;bindHistoryActions(box);
+  }
+  function renderHistory(){
+    const query=normalize($('#historySearch')?.value||'');
+    const rows=judgementHistory.filter(x=>!query||normalize(`${x.product} ${x.policyName||''}`).includes(query));
+    $('#historyCount').textContent=`${rows.length}件`;
+    $('#historyList').innerHTML=rows.map(x=>historyCard(x)).join('');
+    $('#historyEmpty').hidden=judgementHistory.length>0;
+    $('#historyList').hidden=rows.length===0;
+    bindHistoryActions($('#historyList'));
+  }
+  function bindHistoryActions(root=document){
+    $$('[data-restore-history]',root).forEach(b=>b.addEventListener('click',()=>restoreHistoryEntry(b.dataset.restoreHistory)));
+    $$('[data-delete-history]',root).forEach(b=>b.addEventListener('click',()=>{judgementHistory=judgementHistory.filter(x=>x.id!==b.dataset.deleteHistory);saveHistory();renderHistory();renderHistoryNav();renderRecentResultHistory();showToast('履歴を削除しました')}));
+    $$('[data-copy-history-policy]',root).forEach(b=>b.addEventListener('click',async()=>{const e=judgementHistory.find(x=>x.id===b.dataset.copyHistoryPolicy);if(!e?.policyName)return;try{await navigator.clipboard.writeText(e.policyName)}catch{}showToast('ポリシー名をコピーしました')}));
+    $$('[data-open-view]',root).forEach(b=>{if(b.dataset.boundView)return;b.dataset.boundView='1';b.addEventListener('click',()=>setView(b.dataset.openView))});
+  }
+  function restoreHistoryEntry(id){
+    const entry=judgementHistory.find(x=>x.id===id);if(!entry)return;
+    if(entry.itemId&&byId.has(entry.itemId))selectItem(byId.get(entry.itemId));
+    else{clearSelectedItem();$('#productSearch').value=entry.product;}
+    $('#priceUsd').value=entry.price;$('#exchangeRate').value=entry.rate||150;
+    const mode=entry.weightMode||'estimate',radio=$(`input[name="weightMode"][value="${mode}"]`);if(radio){radio.checked=true;radio.dispatchEvent(new Event('change',{bubbles:true}));}
+    if(mode==='measured')$('#measuredWeight').value=entry.measuredWeight||entry.weight;
+    else{
+      if(entry.baseWeight!=null)$('#baseWeight').value=entry.baseWeight;
+      if(entry.packingProfile)$('#packingProfile').value=entry.packingProfile;
+      if(entry.packingWeight!=null)$('#packingWeight').value=entry.packingWeight;
+      $('#customExtra').value=entry.customExtra||0;
+      (entry.selectedExtras||[]).forEach(x=>{const cb=$(`[data-extra-check="${CSS.escape(x.id)}"]`),input=$(`[data-extra-weight="${CSS.escape(x.id)}"]`);if(cb)cb.checked=true;if(input)input.value=x.weight;});
+      renderPackingBreakdown();
+    }
+    updateCalculatedWeight();setView('judge');
+    setTimeout(()=>$('#judgeForm').requestSubmit(),50);
+  }
+  function exportHistory(){
+    const blob=new Blob([JSON.stringify({version:1,history:judgementHistory},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='film-camera-shipping-history.json';a.click();URL.revokeObjectURL(a.href);
   }
 
   function renderDatasetSummary(){
@@ -389,10 +479,15 @@
   }
 
   function init(){
-    initTheme();populateFilters();$('#packingProfile').insertAdjacentHTML('beforeend',(DB.packingProfiles||[]).map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.label)}（${p.defaultG}g）</option>`).join(''));renderExtraPresets();renderPackingBreakdown();$('#clearExtras').addEventListener('click',()=>{$$('[data-extra-check]').forEach(x=>x.checked=false);$('#customExtra').value=0;updateCalculatedWeight()});renderDatasetSummary();renderCoverage();initSearches();renderGenres();renderLocalData();
+    initTheme();populateFilters();$('#packingProfile').insertAdjacentHTML('beforeend',(DB.packingProfiles||[]).map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.label)}（${p.defaultG}g）</option>`).join(''));renderExtraPresets();renderPackingBreakdown();$('#clearExtras').addEventListener('click',()=>{$$('[data-extra-check]').forEach(x=>x.checked=false);$('#customExtra').value=0;updateCalculatedWeight()});renderDatasetSummary();renderCoverage();initSearches();renderGenres();renderLocalData();renderHistoryNav();renderRecentResultHistory();
     const savedRate=Number(storageGet('filmCameraExchangeRate'));if(savedRate>0)$('#exchangeRate').value=savedRate;
     $('#judgeForm').addEventListener('submit',judge);$('#copyPolicy').addEventListener('click',async()=>{const t=$('#policyName').textContent;if(!t||t==='V2ポリシー対象外')return;try{await navigator.clipboard.writeText(t)}catch{const ta=document.createElement('textarea');ta.value=t;document.body.append(ta);ta.select();document.execCommand('copy');ta.remove()}showToast('ポリシー名をコピーしました')});$('#copyUsOverride').addEventListener('click',async()=>{const t=$('#usOverride').textContent.replace('$','');if(!t||t==='—')return;try{await navigator.clipboard.writeText(t)}catch{const ta=document.createElement('textarea');ta.value=t;document.body.append(ta);ta.select();document.execCommand('copy');ta.remove()}showToast('米国送料をコピーしました')});
-    const initial=(location.hash||'#judge').slice(1);if(['judge','database','genres','data'].includes(initial))setView(initial);
+    $$('[data-open-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.openView)));
+    $('#historySearch').addEventListener('input',debounce(renderHistory,100));
+    $('#exportHistory').addEventListener('click',exportHistory);
+    $('#clearHistory').addEventListener('click',()=>{if(!judgementHistory.length)return;if(!confirm('保存済みの判定履歴をすべて削除しますか？'))return;judgementHistory=[];saveHistory();renderHistory();renderHistoryNav();renderRecentResultHistory();showToast('履歴をすべて削除しました')});
+    $('#importHistory').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text()),rows=Array.isArray(data)?data:data.history;if(!Array.isArray(rows))throw new Error();judgementHistory=rows.slice(0,100);saveHistory();renderHistory();renderHistoryNav();renderRecentResultHistory();showToast('履歴を読み込みました')}catch{showToast('履歴JSONを読み込めませんでした')}e.target.value=''});
+    const initial=(location.hash||'#judge').slice(1);if(['judge','history','tools','database','genres','data'].includes(initial))setView(initial);
     updateCalculatedWeight();renderDatabase();
   }
   init();
