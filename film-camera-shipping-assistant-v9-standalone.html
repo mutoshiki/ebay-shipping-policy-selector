@@ -599,7 +599,7 @@ CAM-US-50-99-600G  参考 $39.18
       else ps.textContent='商品ごとの推奨値を使用';
     }
   }
-  $('input[name="weightMode"]').forEach(r=>r.addEventListener('change',()=>{
+  $$('input[name="weightMode"]').forEach(r=>r.addEventListener('change',()=>{
     const measured=r.value==='measured'&&r.checked;$('#estimateControls').hidden=measured;$('#measuredControls').hidden=!measured;updateCalculatedWeight();
   }));
   ['baseWeight','customExtra','measuredWeight','boxLength','boxWidth','boxHeight'].forEach(id=>$('#'+id).addEventListener('input',updateCalculatedWeight));
