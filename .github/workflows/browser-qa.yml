@@ -42,4 +42,6 @@ jobs:
           name: ebay-shipping-browser-qa
           path: |
             qa-artifacts/
+            index.html
+            film-camera-shipping-assistant-v9-standalone.html
           if-no-files-found: warn

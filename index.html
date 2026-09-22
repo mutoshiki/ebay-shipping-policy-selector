@@ -81,7 +81,7 @@
   .form-panel,.result-panel{padding:18px}
   .shipping-cards.primary-routes,.all-routes{grid-template-columns:1fr 1fr}
   .primary-routes .shipping-card{min-height:96px;padding:11px}
-  .judge-action-area{position:sticky;bottom:72px;z-index:8;margin:16px -8px -8px;padding:10px 8px 8px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(10px)}
+  .judge-action-area{position:static;margin:16px 0 0;padding:0;border-top:0;background:transparent;backdrop-filter:none}
   .v3-rule-grid{grid-template-columns:1fr}
   .result-primary-grid{grid-template-columns:1fr}
 }
@@ -134,7 +134,7 @@
             <div class="packing-fields">
               <div class="field"><label for="baseWeight">本体・商品重量 <span>g</span></label><input id="baseWeight" type="number" inputmode="decimal" min="0" step="1" placeholder="商品選択で自動入力"><small id="baseWeightHelp">商品データを手動修正できます</small></div>
               <div class="field"><label for="packingProfile">梱包方法</label><select id="packingProfile"><option value="custom">手動設定</option></select><small>商品サイズ別の箱・袋・緩衝材モデルから自動選択</small></div>
-              <div class="field"><label for="packingWeight">梱包材重量 <span>g</span></label><input id="packingWeight" type="number" inputmode="decimal" min="0" step="1" value="200"><small id="packingHelp">箱サイズ・資材構成から再計算した標準値。実測があれば上書き</small></div>
+              <div class="field"><label for="packingWeight">梱包材重量 <span>g</span></label><input id="packingWeight" type="number" inputmode="decimal" min="0" step="1" placeholder="商品選択で自動入力"><small id="packingHelp">商品を選ぶと梱包材の標準値を自動入力します。手動入力もできます</small></div>
             </div>
             <div id="packingBreakdown" class="packing-breakdown"><span>梱包材の内訳</span><p>商品を選ぶと資材ごとの予測を表示します。</p></div>
 
@@ -483,6 +483,10 @@ CAM-US-50-99-600G  参考 $39.18
 
   function selectItem(item){
     selectedItem=item; $('#productSearch').value=item.name;
+    $('#customExtra').value=0;$('#measuredWeight').value='';
+    ['boxLength','boxWidth','boxHeight'].forEach(id=>$('#'+id).value='');
+    const estimateRadio=$('input[name="weightMode"][value="estimate"]');if(estimateRadio)estimateRadio.checked=true;
+    $('#estimateControls').hidden=false;$('#measuredControls').hidden=true;
     const badge=dataLabel(item),w=effectiveWeight(item),local=localFor(item),profile=profileForItem(item),localPacking=localPackingFor(item);
     $('#selectedItemCard').classList.remove('empty-state-small');
     $('#selectedItemCard').innerHTML=`<div class="selected-title"><div><span class="item-brand">${escapeHtml(item.brand)}</span><h3>${escapeHtml(item.name)}</h3></div><button type="button" id="clearSelected">選択解除</button></div><div class="selected-meta"><span class="tag">${escapeHtml(typeLabel(item.kind))}</span><span class="tag">${escapeHtml(item.genreJa)}</span>${item.format?`<span class="tag">${escapeHtml(item.format)}</span>`:''}${item.mount?`<span class="tag">${escapeHtml(item.mount)}</span>`:''}<span class="quality-badge ${badge.cls}">${escapeHtml(badge.text)}</span></div><div class="selected-weight three"><div><span>${w.type==='estimate'?'推定重量範囲':'本体・商品重量'}</span><strong>${escapeHtml(itemWeightText(item))}</strong></div><div><span>推奨梱包</span><strong>${escapeHtml(profile?.label||'手動')}</strong></div><div><span>梱包加算</span><strong>${fmtG(localPacking ?? item.packingDefaultG ?? profile?.defaultG ?? item.packingMaxG)}</strong></div></div>`;
@@ -496,7 +500,12 @@ CAM-US-50-99-600G  参考 $39.18
     renderPackingBreakdown();renderExtraPresets(item);updateCalculatedWeight();
   }
   function clearSelectedItem(){
-    selectedItem=null;$('#productSearch').value='';$('#baseWeight').value='';$('#packingProfile').value='custom';renderPackingBreakdown();renderExtraPresets(null);
+    selectedItem=null;$('#productSearch').value='';$('#baseWeight').value='';$('#packingProfile').value='custom';$('#packingWeight').value='';
+    $('#customExtra').value=0;$('#measuredWeight').value='';['boxLength','boxWidth','boxHeight'].forEach(id=>$('#'+id).value='');
+    const estimateRadio=$('input[name="weightMode"][value="estimate"]');if(estimateRadio)estimateRadio.checked=true;
+    $('#estimateControls').hidden=false;$('#measuredControls').hidden=true;
+    $('#packingHelp').textContent='商品を選ぶと梱包材の標準値を自動入力します。手動入力もできます';
+    renderPackingBreakdown();renderExtraPresets(null);
     $('#selectedItemCard').className='selected-item empty-state-small';$('#selectedItemCard').textContent='商品を選ぶと、重量と梱包目安を表示します。';updateCalculatedWeight();
   }
 

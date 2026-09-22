@@ -66,7 +66,7 @@ def fill_estimate(page, *, price, base, packing=0, custom=0, dims=None):
 
 def snapshot_result(page):
     def txt(sel):
-        return page.locator(sel).inner_text().strip()
+        return (page.locator(sel).text_content() or "").strip()
     return {
         "status": txt("#resultStatus"),
         "policy": txt("#policyName"),
@@ -140,6 +140,65 @@ with sync_playwright() as p:
             record(name, False, str(exc))
         finally:
             context.close()
+
+    # Initial state should not invent package weight, and mobile actions must not cover the form.
+    context, page, page_errors, console_errors = setup_page(browser, 390, 844, "light", True)
+    try:
+        base = page.input_value("#baseWeight")
+        packing = page.input_value("#packingWeight")
+        calculated = (page.locator("#calculatedWeight").text_content() or "").strip()
+        position = page.evaluate("getComputedStyle(document.querySelector('.judge-action-area')).position")
+        assert_eq(base, "", "initial base")
+        assert_eq(packing, "", "initial packing")
+        assert_eq(calculated, "—", "initial calculated weight")
+        assert_eq(position, "static", "mobile judge action position")
+        if page_errors or console_errors:
+            raise AssertionError(f"errors page={page_errors} console={console_errors}")
+        record("initial-empty-weight-mobile-flow", True, {"calculated": calculated, "position": position})
+    except Exception as exc:
+        page.screenshot(path=str(OUT / "FAIL-initial-state.png"), full_page=True)
+        record("initial-empty-weight-mobile-flow", False, str(exc))
+    finally:
+        context.close()
+
+    # Switching/clearing products must not reuse packaging state from a previous item.
+    context, page, page_errors, console_errors = setup_page(browser)
+    try:
+        page.fill("#productSearch", "DG-2")
+        page.wait_for_selector("#searchSuggestions:not([hidden])")
+        page.locator("#searchSuggestions .suggestion").first.click()
+        page.fill("#customExtra", "45")
+        details = page.locator("details.dimension-disclosure")
+        if not details.get_attribute("open"):
+            details.locator("summary").click()
+        page.fill("#boxLength", "23")
+        page.fill("#boxWidth", "15")
+        page.fill("#boxHeight", "7")
+        page.locator('input[name="weightMode"][value="measured"]').check()
+        page.fill("#measuredWeight", "999")
+
+        page.fill("#productSearch", "AS-1")
+        page.wait_for_selector("#searchSuggestions:not([hidden])")
+        page.locator("#searchSuggestions .suggestion").first.click()
+        assert_eq(page.input_value("#customExtra"), "0", "switch custom extra")
+        assert_eq(page.input_value("#measuredWeight"), "", "switch measured")
+        assert_eq(page.input_value("#boxLength"), "", "switch box length")
+        assert_eq(page.input_value("#boxWidth"), "", "switch box width")
+        assert_eq(page.input_value("#boxHeight"), "", "switch box height")
+        assert_eq(page.locator('input[name="weightMode"][value="estimate"]').is_checked(), True, "switch estimate mode")
+
+        page.click("#clearSelected")
+        assert_eq(page.input_value("#baseWeight"), "", "clear base")
+        assert_eq(page.input_value("#packingWeight"), "", "clear packing")
+        assert_eq((page.locator("#calculatedWeight").text_content() or "").strip(), "—", "clear calculated")
+        if page_errors or console_errors:
+            raise AssertionError(f"errors page={page_errors} console={console_errors}")
+        record("item-switch-clear-resets-package-state", True)
+    except Exception as exc:
+        page.screenshot(path=str(OUT / "FAIL-item-reset.png"), full_page=True)
+        record("item-switch-clear-resets-package-state", False, str(exc))
+    finally:
+        context.close()
 
     # Core policy matrix through rendered UI.
     run_case(
@@ -282,7 +341,7 @@ with sync_playwright() as p:
     try:
         page.locator('.nav-button[data-view="tools"]').click()
         page.wait_for_selector("#view-tools:not([hidden])")
-        snapshot = page.locator("#codexPromptText").inner_text()
+        snapshot = (page.locator("#codexPromptText").text_content() or "").strip()
         assert_in("440g / $34.99 → CAM-US-0-49-600G", snapshot, "current settings")
         if "CAM0100G-V3\nCAM0200G-V3" in snapshot:
             raise AssertionError("obsolete V3-only policy creation prompt is still visible")
