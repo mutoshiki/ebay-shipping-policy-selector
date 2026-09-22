@@ -391,7 +391,7 @@ with sync_playwright() as p:
         for target in ["database", "genres", "data"]:
             page.locator(f'[data-open-view="{target}"]').first.click()
             page.wait_for_selector(f'#view-{target}:not([hidden])')
-            page.locator('[data-open-view="tools"]').first.click()
+            page.locator(f'#view-{target} [data-open-view="tools"]').click()
             page.wait_for_selector('#view-tools:not([hidden])')
         page.locator('.nav-button[data-view="history"]').click()
         page.wait_for_selector('#view-history:not([hidden])')
@@ -435,10 +435,8 @@ with sync_playwright() as p:
     page.on("pageerror", lambda e: page_errors.append(str(e)))
     page.on("console", lambda m: console_errors.append(m.text) if m.type == "error" else None)
     try:
-        page.add_init_script("""() => {
-          localStorage.setItem('filmCameraMeasurements', JSON.stringify([null, 123, {}, {name:'ok', id:'x'}]));
-          localStorage.setItem('filmCameraJudgementHistoryV1', JSON.stringify([null, 123, {}, {id:'h-ok', product:'ok', weight:100, createdAt:new Date().toISOString()}]));
-        }""")
+        page.add_init_script("""localStorage.setItem('filmCameraMeasurements', JSON.stringify([null, 123, {}, {name:'ok', id:'x'}]));
+localStorage.setItem('filmCameraJudgementHistoryV1', JSON.stringify([null, 123, {}, {id:'h-ok', product:'ok', weight:100, createdAt:new Date().toISOString()}]));""")
         page.goto(BASE, wait_until="load")
         page.wait_for_selector("#judgeForm")
         page.wait_for_timeout(100)
