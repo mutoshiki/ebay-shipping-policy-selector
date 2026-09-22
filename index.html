@@ -380,13 +380,23 @@ $50–99.99で600g以下は、未作成のCAM-US-50-99-600G候補として表示
   function storageGet(key){ try { return window.localStorage.getItem(key); } catch { return memoryStorage.get(key) ?? null; } }
   function storageSet(key,value){ try { window.localStorage.setItem(key,value); } catch { memoryStorage.set(key,String(value)); } }
 
+  function sanitizeLocalMeasurements(value){
+    if(!Array.isArray(value)) return [];
+    return value.filter(x=>x&&typeof x==='object'&&typeof x.name==='string'&&x.name.trim());
+  }
+  function sanitizeHistory(value){
+    if(!Array.isArray(value)) return [];
+    return value
+      .filter(x=>x&&typeof x==='object'&&typeof x.product==='string'&&x.product.trim()&&Number.isFinite(Number(x.weight)))
+      .map((x,i)=>({...x,id:(typeof x.id==='string'&&x.id)?x.id:`legacy-${i}-${normalize(x.product).slice(0,24)||'item'}`}));
+  }
   function loadLocal(){
-    try { const value=JSON.parse(storageGet('filmCameraMeasurements')||'[]'); return Array.isArray(value)?value:[]; }
+    try { return sanitizeLocalMeasurements(JSON.parse(storageGet('filmCameraMeasurements')||'[]')); }
     catch { return []; }
   }
   function saveLocal(){storageSet('filmCameraMeasurements',JSON.stringify(localMeasurements));}
   function loadHistory(){
-    try { const value=JSON.parse(storageGet('filmCameraJudgementHistoryV1')||'[]'); return Array.isArray(value)?value:[]; }
+    try { return sanitizeHistory(JSON.parse(storageGet('filmCameraJudgementHistoryV1')||'[]')); }
     catch { return []; }
   }
   function saveHistory(){storageSet('filmCameraJudgementHistoryV1',JSON.stringify(judgementHistory.slice(0,100)));}
@@ -821,10 +831,16 @@ $50–99.99で600g以下は、未作成のCAM-US-50-99-600G候補として表示
   function renderHistory(){
     const query=normalize($('#historySearch')?.value||'');
     const rows=judgementHistory.filter(x=>!query||normalize(`${x.product} ${x.policyName||''}`).includes(query));
+    const empty=$('#historyEmpty'),hasAny=judgementHistory.length>0,noRows=rows.length===0;
     $('#historyCount').textContent=`${rows.length}件`;
     $('#historyList').innerHTML=rows.map(x=>historyCard(x)).join('');
-    $('#historyEmpty').hidden=judgementHistory.length>0;
-    $('#historyList').hidden=rows.length===0;
+    $('#historyList').hidden=noRows;empty.hidden=!noRows;
+    if(noRows){
+      const title=$('h2',empty),message=$('p',empty),judgeButton=$('[data-open-view="judge"]',empty);
+      if(title)title.textContent=hasAny?'一致する履歴がありません':'履歴はまだありません';
+      if(message)message.textContent=hasAny?'検索条件を変えてください。':'配送判定を行うと自動的に保存されます。';
+      if(judgeButton)judgeButton.hidden=hasAny;
+    }
     bindHistoryActions($('#historyList'));
   }
   function bindHistoryActions(root=document){
@@ -954,7 +970,7 @@ $50–99.99で600g以下は、未作成のCAM-US-50-99-600G候補として表示
     e.target.reset();localSelectedItem=null;updateLocalDerivedPacking();renderLocalData();renderDatabase();showToast('実測値を保存しました');
   });
   $('#exportLocal').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({version:1,measurements:localMeasurements},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='film-camera-measurements.json';a.click();URL.revokeObjectURL(a.href)});
-  $('#importLocal').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text());const rows=Array.isArray(data)?data:data.measurements;if(!Array.isArray(rows))throw new Error();localMeasurements=rows;saveLocal();renderLocalData();showToast('実測データを読み込みました')}catch{showToast('JSONファイルを読み込めませんでした')}e.target.value=''});
+  $('#importLocal').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text());const rows=Array.isArray(data)?data:data.measurements;if(!Array.isArray(rows))throw new Error();localMeasurements=sanitizeLocalMeasurements(rows);saveLocal();renderLocalData();showToast('実測データを読み込みました')}catch{showToast('JSONファイルを読み込めませんでした')}e.target.value=''});
 
   function initSearches(){
     const product=$('#productSearch'),suggestions=$('#searchSuggestions');product.addEventListener('input',debounce(()=>renderSuggestions(suggestions,product.value,selectItem)));product.addEventListener('focus',()=>renderSuggestions(suggestions,product.value,selectItem));
@@ -970,7 +986,7 @@ $50–99.99で600g以下は、未作成のCAM-US-50-99-600G候補として表示
     $('#historySearch').addEventListener('input',debounce(renderHistory,100));
     $('#exportHistory').addEventListener('click',exportHistory);
     $('#clearHistory').addEventListener('click',()=>{if(!judgementHistory.length)return;if(!confirm('保存済みの判定履歴をすべて削除しますか？'))return;judgementHistory=[];saveHistory();renderHistory();renderHistoryNav();renderRecentResultHistory();showToast('履歴をすべて削除しました')});
-    $('#importHistory').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text()),rows=Array.isArray(data)?data:data.history;if(!Array.isArray(rows))throw new Error();judgementHistory=rows.slice(0,100);saveHistory();renderHistory();renderHistoryNav();renderRecentResultHistory();showToast('履歴を読み込みました')}catch{showToast('履歴JSONを読み込めませんでした')}e.target.value=''});
+    $('#importHistory').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text()),rows=Array.isArray(data)?data:data.history;if(!Array.isArray(rows))throw new Error();judgementHistory=sanitizeHistory(rows).slice(0,100);saveHistory();renderHistory();renderHistoryNav();renderRecentResultHistory();showToast('履歴を読み込みました')}catch{showToast('履歴JSONを読み込めませんでした')}e.target.value=''});
     const initial=(location.hash||'#judge').slice(1);if(['judge','history','tools','database','genres','data'].includes(initial))setView(initial);
     updateCalculatedWeight();renderDatabase();
   }
