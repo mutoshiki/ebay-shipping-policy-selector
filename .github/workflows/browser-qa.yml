@@ -3,7 +3,11 @@ name: Browser E2E QA
 on:
   push:
     branches:
+      - main
       - qa/main-browser-verify-20260922
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
