@@ -382,6 +382,122 @@ with sync_playwright() as p:
     finally:
         context.close()
 
+
+    # Every secondary view must render without JS/console errors.
+    context, page, page_errors, console_errors = setup_page(browser)
+    try:
+        page.locator('.nav-button[data-view="tools"]').click()
+        page.wait_for_selector('#view-tools:not([hidden])')
+        for target in ["database", "genres", "data"]:
+            page.locator(f'[data-open-view="{target}"]').first.click()
+            page.wait_for_selector(f'#view-{target}:not([hidden])')
+            page.locator('[data-open-view="tools"]').first.click()
+            page.wait_for_selector('#view-tools:not([hidden])')
+        page.locator('.nav-button[data-view="history"]').click()
+        page.wait_for_selector('#view-history:not([hidden])')
+        if page_errors or console_errors:
+            raise AssertionError(f"errors page={page_errors} console={console_errors}")
+        record("all-secondary-views-render", True)
+    except Exception as exc:
+        page.screenshot(path=str(OUT / "FAIL-secondary-views.png"), full_page=True)
+        record("all-secondary-views-render", False, str(exc))
+    finally:
+        context.close()
+
+    # Search with existing history but zero matches must show an explicit empty result,
+    # rather than leaving the history pane blank.
+    context, page, page_errors, console_errors = setup_page(browser)
+    try:
+        fill_estimate(page, price=34.99, base=300, packing=140)
+        page.get_by_role("button", name="履歴を見る").click()
+        page.wait_for_selector("#view-history:not([hidden])")
+        page.fill("#historySearch", "__no_history_match__")
+        page.wait_for_timeout(250)
+        empty = page.locator("#historyEmpty")
+        if empty.is_hidden():
+            raise AssertionError("history zero-match state is hidden")
+        empty_text = empty.inner_text().strip()
+        assert_in("一致", empty_text, "history zero-match message")
+        if page_errors or console_errors:
+            raise AssertionError(f"errors page={page_errors} console={console_errors}")
+        record("history-search-zero-state", True, {"message": empty_text})
+    except Exception as exc:
+        page.screenshot(path=str(OUT / "FAIL-history-search-zero.png"), full_page=True)
+        record("history-search-zero-state", False, str(exc))
+    finally:
+        context.close()
+
+    # Corrupt-but-valid JSON arrays in localStorage must not crash app startup.
+    context = browser.new_context(viewport={"width": 1280, "height": 900})
+    page = context.new_page()
+    page_errors = []
+    console_errors = []
+    page.on("pageerror", lambda e: page_errors.append(str(e)))
+    page.on("console", lambda m: console_errors.append(m.text) if m.type == "error" else None)
+    try:
+        page.add_init_script("""() => {
+          localStorage.setItem('filmCameraMeasurements', JSON.stringify([null, 123, {}, {name:'ok', id:'x'}]));
+          localStorage.setItem('filmCameraJudgementHistoryV1', JSON.stringify([null, 123, {}, {id:'h-ok', product:'ok', weight:100, createdAt:new Date().toISOString()}]));
+        }""")
+        page.goto(BASE, wait_until="load")
+        page.wait_for_selector("#judgeForm")
+        page.wait_for_timeout(100)
+        if page_errors or console_errors:
+            raise AssertionError(f"errors page={page_errors} console={console_errors}")
+        record("malformed-storage-arrays-safe", True)
+    except Exception as exc:
+        page.screenshot(path=str(OUT / "FAIL-malformed-storage.png"), full_page=True)
+        record("malformed-storage-arrays-safe", False, str(exc))
+    finally:
+        context.close()
+
+    # Measured mode should drive policy selection and suppress estimate warnings.
+    context, page, page_errors, console_errors = setup_page(browser)
+    try:
+        page.locator('input[name="weightMode"][value="measured"]').check()
+        page.fill("#measuredWeight", "440")
+        page.fill("#priceUsd", "34.99")
+        page.click("#judgeButton")
+        page.wait_for_timeout(100)
+        got = snapshot_result(page)
+        assert_eq(got["policy"], "CAM-US-0-49-600G", "measured policy")
+        if "推定重量による判定" in got["warning"]:
+            raise AssertionError(f"estimate warning shown in measured mode: {got['warning']}")
+        if page_errors or console_errors:
+            raise AssertionError(f"errors page={page_errors} console={console_errors}")
+        record("measured-mode-policy", True, got)
+    except Exception as exc:
+        page.screenshot(path=str(OUT / "FAIL-measured-mode.png"), full_page=True)
+        record("measured-mode-policy", False, str(exc))
+    finally:
+        context.close()
+
+    # Volumetric weight must still override a smaller measured weight.
+    context, page, page_errors, console_errors = setup_page(browser)
+    try:
+        page.locator('input[name="weightMode"][value="measured"]').check()
+        page.fill("#measuredWeight", "100")
+        page.fill("#priceUsd", "34.99")
+        details = page.locator("details.dimension-disclosure")
+        if not details.get_attribute("open"):
+            details.locator("summary").click()
+        page.fill("#boxLength", "23")
+        page.fill("#boxWidth", "15")
+        page.fill("#boxHeight", "7")
+        page.click("#judgeButton")
+        page.wait_for_timeout(100)
+        got = snapshot_result(page)
+        assert_eq(got["policy"], "CAM-US-0-49-600G", "measured volumetric policy")
+        assert_in("301.9g", got["weight"], "measured volumetric weight")
+        if page_errors or console_errors:
+            raise AssertionError(f"errors page={page_errors} console={console_errors}")
+        record("measured-volume-overrides", True, got)
+    except Exception as exc:
+        page.screenshot(path=str(OUT / "FAIL-measured-volume.png"), full_page=True)
+        record("measured-volume-overrides", False, str(exc))
+    finally:
+        context.close()
+
     browser.close()
 
 report = {
