@@ -646,7 +646,7 @@ CAM-US-50-99-600G  参考 $39.18
     const mode=$('input[name="weightMode"]:checked').value;
     const elements=mode==='measured'
       ? [$('#measuredWeight')]
-      : [$('#baseWeight'),$('#packingWeight'),$('#customExtra'),...$('[data-extra-check]:checked').map(cb=>$(`[data-extra-weight="${CSS.escape(cb.dataset.extraCheck)}"]`))];
+      : [$('#baseWeight'),$('#packingWeight'),$('#customExtra'),...$$('[data-extra-check]:checked').map(cb=>$(`[data-extra-weight="${CSS.escape(cb.dataset.extraCheck)}"]`))];
     return elements.find(el=>el&&el.value!==''&&(!Number.isFinite(Number(el.value))||Number(el.value)<0))||null;
   }
   function judge(event){
