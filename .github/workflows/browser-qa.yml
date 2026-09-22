@@ -1,0 +1,47 @@
+name: Browser E2E QA
+
+on:
+  push:
+    branches:
+      - qa/main-browser-verify-20260922
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install Playwright
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Start local site
+        run: |
+          python -m http.server 4173 --bind 127.0.0.1 > /tmp/ebay-site.log 2>&1 &
+          echo $! > /tmp/ebay-site.pid
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:4173/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/ebay-site.log
+          exit 1
+      - name: Run rendered browser QA
+        run: python qa/browser_qa.py
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ebay-shipping-browser-qa
+          path: |
+            qa-artifacts/
+            index.html
+            film-camera-shipping-assistant-v9-standalone.html
+          if-no-files-found: warn
