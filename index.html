@@ -81,7 +81,7 @@
   .form-panel,.result-panel{padding:18px}
   .shipping-cards.primary-routes,.all-routes{grid-template-columns:1fr 1fr}
   .primary-routes .shipping-card{min-height:96px;padding:11px}
-  .judge-action-area{position:sticky;bottom:72px;z-index:8;margin:16px -8px -8px;padding:10px 8px 8px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(10px)}
+  .judge-action-area{position:static;margin:16px 0 0;padding:0;border-top:0;background:transparent;backdrop-filter:none}
   .v3-rule-grid{grid-template-columns:1fr}
   .result-primary-grid{grid-template-columns:1fr}
 }
@@ -134,7 +134,7 @@
             <div class="packing-fields">
               <div class="field"><label for="baseWeight">本体・商品重量 <span>g</span></label><input id="baseWeight" type="number" inputmode="decimal" min="0" step="1" placeholder="商品選択で自動入力"><small id="baseWeightHelp">商品データを手動修正できます</small></div>
               <div class="field"><label for="packingProfile">梱包方法</label><select id="packingProfile"><option value="custom">手動設定</option></select><small>商品サイズ別の箱・袋・緩衝材モデルから自動選択</small></div>
-              <div class="field"><label for="packingWeight">梱包材重量 <span>g</span></label><input id="packingWeight" type="number" inputmode="decimal" min="0" step="1" value="200"><small id="packingHelp">箱サイズ・資材構成から再計算した標準値。実測があれば上書き</small></div>
+              <div class="field"><label for="packingWeight">梱包材重量 <span>g</span></label><input id="packingWeight" type="number" inputmode="decimal" min="0" step="1" placeholder="商品選択で自動入力"><small id="packingHelp">商品を選ぶと梱包材の標準値を自動入力します。手動入力もできます</small></div>
             </div>
             <div id="packingBreakdown" class="packing-breakdown"><span>梱包材の内訳</span><p>商品を選ぶと資材ごとの予測を表示します。</p></div>
 
@@ -264,12 +264,15 @@ CAM-US-130-149-700G $48.62
 
 【未作成候補・確定値として扱わない】
 CAM-US-50-99-600G  参考 $39.18
-※旧近似式による参考値。税分類・実測重量・最新実効率の確認後に確定する。
+※旧近似式による参考値。確定送料として使用しない。
 
-米国向けはeBay.comの「国内配送」欄にeBay SpeedPAK Economyを設定する。
-国際配送欄は米国以外に適用され、既存の重量別Rate Table（INT-AP-SPK-xxxxG-V3）を再利用する。
-請求判定重量は実重量と容積重量（縦×横×高さ÷8000kg）の大きい方を使う。箱サイズが未入力なら実重量のみで暫定判定する。
-未登録の価格帯×重量の組み合わせは、このツールで新しい送料を推測して確定しない。</pre></div>
+米国Policyは、商品価格帯の中で「請求判定重量以上をカバーする最小のPolicy重量枠」を使う。
+例：440g / $34.99 → CAM-US-0-49-600G。
+$50–99.99で600g以下は、未作成のCAM-US-50-99-600G候補として表示し、900g既存Policyへ自動で逃がさない。
+各US Policyは同じ重量枠のINT-AP-SPK-xxxxG-V3を共有する。
+請求判定重量は、実重量と容積重量（縦×横×高さ÷8000kg）の大きい方。
+箱サイズが未入力なら実重量のみで暫定判定する。
+未作成候補の参考送料は確定値として扱わない。</pre></div>
         </details>
       </section>
       <details class="panel dataset-disclosure disclosure">
@@ -483,6 +486,10 @@ CAM-US-50-99-600G  参考 $39.18
 
   function selectItem(item){
     selectedItem=item; $('#productSearch').value=item.name;
+    $('#customExtra').value=0;$('#measuredWeight').value='';
+    ['boxLength','boxWidth','boxHeight'].forEach(id=>$('#'+id).value='');
+    const estimateRadio=$('input[name="weightMode"][value="estimate"]');if(estimateRadio)estimateRadio.checked=true;
+    $('#estimateControls').hidden=false;$('#measuredControls').hidden=true;
     const badge=dataLabel(item),w=effectiveWeight(item),local=localFor(item),profile=profileForItem(item),localPacking=localPackingFor(item);
     $('#selectedItemCard').classList.remove('empty-state-small');
     $('#selectedItemCard').innerHTML=`<div class="selected-title"><div><span class="item-brand">${escapeHtml(item.brand)}</span><h3>${escapeHtml(item.name)}</h3></div><button type="button" id="clearSelected">選択解除</button></div><div class="selected-meta"><span class="tag">${escapeHtml(typeLabel(item.kind))}</span><span class="tag">${escapeHtml(item.genreJa)}</span>${item.format?`<span class="tag">${escapeHtml(item.format)}</span>`:''}${item.mount?`<span class="tag">${escapeHtml(item.mount)}</span>`:''}<span class="quality-badge ${badge.cls}">${escapeHtml(badge.text)}</span></div><div class="selected-weight three"><div><span>${w.type==='estimate'?'推定重量範囲':'本体・商品重量'}</span><strong>${escapeHtml(itemWeightText(item))}</strong></div><div><span>推奨梱包</span><strong>${escapeHtml(profile?.label||'手動')}</strong></div><div><span>梱包加算</span><strong>${fmtG(localPacking ?? item.packingDefaultG ?? profile?.defaultG ?? item.packingMaxG)}</strong></div></div>`;
@@ -496,7 +503,12 @@ CAM-US-50-99-600G  参考 $39.18
     renderPackingBreakdown();renderExtraPresets(item);updateCalculatedWeight();
   }
   function clearSelectedItem(){
-    selectedItem=null;$('#productSearch').value='';$('#baseWeight').value='';$('#packingProfile').value='custom';renderPackingBreakdown();renderExtraPresets(null);
+    selectedItem=null;$('#productSearch').value='';$('#baseWeight').value='';$('#packingProfile').value='custom';$('#packingWeight').value='';
+    $('#customExtra').value=0;$('#measuredWeight').value='';['boxLength','boxWidth','boxHeight'].forEach(id=>$('#'+id).value='');
+    const estimateRadio=$('input[name="weightMode"][value="estimate"]');if(estimateRadio)estimateRadio.checked=true;
+    $('#estimateControls').hidden=false;$('#measuredControls').hidden=true;
+    $('#packingHelp').textContent='商品を選ぶと梱包材の標準値を自動入力します。手動入力もできます';
+    renderPackingBreakdown();renderExtraPresets(null);
     $('#selectedItemCard').className='selected-item empty-state-small';$('#selectedItemCard').textContent='商品を選ぶと、重量と梱包目安を表示します。';updateCalculatedWeight();
   }
 
@@ -599,7 +611,7 @@ CAM-US-50-99-600G  参考 $39.18
       else ps.textContent='商品ごとの推奨値を使用';
     }
   }
-  $('input[name="weightMode"]').forEach(r=>r.addEventListener('change',()=>{
+  $$('input[name="weightMode"]').forEach(r=>r.addEventListener('change',()=>{
     const measured=r.value==='measured'&&r.checked;$('#estimateControls').hidden=measured;$('#measuredControls').hidden=!measured;updateCalculatedWeight();
   }));
   ['baseWeight','customExtra','measuredWeight','boxLength','boxWidth','boxHeight'].forEach(id=>$('#'+id).addEventListener('input',updateCalculatedWeight));
@@ -646,7 +658,7 @@ CAM-US-50-99-600G  参考 $39.18
     const mode=$('input[name="weightMode"]:checked').value;
     const elements=mode==='measured'
       ? [$('#measuredWeight')]
-      : [$('#baseWeight'),$('#packingWeight'),$('#customExtra'),...$('[data-extra-check]:checked').map(cb=>$(`[data-extra-weight="${CSS.escape(cb.dataset.extraCheck)}"]`))];
+      : [$('#baseWeight'),$('#packingWeight'),$('#customExtra'),...$$('[data-extra-check]:checked').map(cb=>$(`[data-extra-weight="${CSS.escape(cb.dataset.extraCheck)}"]`))];
     return elements.find(el=>el&&el.value!==''&&(!Number.isFinite(Number(el.value))||Number(el.value)<0))||null;
   }
   function judge(event){
